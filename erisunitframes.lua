@@ -259,9 +259,17 @@ local function set_text_color_and_name_and_type(mob_data, text_object)
 
   local type_text = nil
 
+  --print('id=' .. mob_data.id .. ' ' ..
+  --  'is_npc=' .. tostring(mob_data.is_npc) .. ' ' ..
+  --  'spawn_type=' .. mob_data.spawn_type .. ' '
+  --)
+
   if mob_data.id == windower.ffxi.get_player().id then
     text_object:color(255, 255, 255)
     type_text = 'you'
+  elseif mob_data.hpp == 0 then
+    text_object:color(188, 188, 188)
+    type_text = 'dead'
   elseif mob_data.in_party == true then
     text_object:color(195, 255, 255)
     type_text = 'party'
@@ -273,6 +281,10 @@ local function set_text_color_and_name_and_type(mob_data, text_object)
       -- npc
       text_object:color(193, 254, 193)
       type_text = 'npc'
+    elseif mob_data.spawn_type == 34 then
+      -- interactive object
+      text_object:color(193, 254, 193)
+      type_text = 'obj'
     else
       -- monster of some kind
       if mob_data.claim_id ~= 0 then

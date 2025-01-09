@@ -39,6 +39,8 @@ local isLoaded = false
 -- config
 local config = {}
 config.bar_width = 170
+config.only_show_player_frame_in_combat = true
+
 
 -- initial load
 windower.register_event('load', function()

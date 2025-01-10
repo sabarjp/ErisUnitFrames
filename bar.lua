@@ -4,57 +4,63 @@ bar.__index = bar
 
 -- Constructor
 function bar:new(params)
-  local instance               = setmetatable({}, bar)
+  local instance                   = setmetatable({}, bar)
 
   -- internal variables
-  instance._bar_left           = images.new({
+  instance._bar_left               = images.new({
     flags = {
       draggable = false
     }
   })
 
-  instance._bar_right          = images.new({
+  instance._bar_right              = images.new({
     flags = {
       draggable = false
     }
   })
 
-  instance._bar_bg             = images.new({
+  instance._bar_bg                 = images.new({
     flags = {
       draggable = false
     }
   })
 
-  instance._bar_fg             = images.new({
+  instance._bar_fg                 = images.new({
     flags = {
       draggable = false
     }
   })
 
-  instance._bar_text           = texts.new({
+  instance._bar_text               = texts.new({
     flags = {
       draggable = false
     }
   })
 
-  instance._x                  = params.x or 0
-  instance._y                  = params.y or 0
-  instance._isVisible          = false
-  instance._width              = params.width or 50
-  instance._height             = params.height or 10
-  instance._text_font          = params.text_font or 'Calibri'
-  instance._text_color         = params.text_color or { 255, 255, 255 }
-  instance._text_alpha         = params.text_alpha or 255
-  instance._text_size          = params.text_size or 12
-  instance._text_right_align   = params.text_right_align or false
-  instance._text_offset        = params.text_offset or { x = 0, y = 0 }
-  instance._background_color   = params.background_color or { 150, 150, 150 }
-  instance._background_alpha   = params.background_alpha or 128
-  instance._foreground_color   = params.foreground_color or { 255, 255, 255 }
-  instance._foreground_alpha   = params.foreground_alpha or 255
-  instance._disable_text       = params.disable_text or false
-  instance._disable_foreground = params.disable_foreground or false
-  instance._disable_background = params.disable_background or false
+  instance._x                      = params.x or 0
+  instance._y                      = params.y or 0
+  instance._isVisible              = false
+  instance._width                  = params.width or 50
+  instance._height                 = params.height or 10
+  instance._text_font              = params.text_font or 'Calibri'
+  instance._text_color             = params.text_color or { 255, 255, 255 }
+  instance._text_alpha             = params.text_alpha or 255
+  instance._text_size              = params.text_size or 12
+  instance._text_right_align       = params.text_right_align or false
+  instance._text_offset            = params.text_offset or { x = 0, y = 0 }
+  instance._background_color       = params.background_color or { 150, 150, 150 }
+  instance._background_alpha       = params.background_alpha or 128
+  instance._foreground_color       = params.foreground_color or { 255, 255, 255 }
+  instance._foreground_alpha       = params.foreground_alpha or 255
+  instance._left_right_color       = params.background_color or { 150, 150, 150 }
+  instance._left_right_alpha       = params.background_alpha or 128
+  instance._disable_text           = params.disable_text or false
+  instance._disable_foreground     = params.disable_foreground or false
+  instance._disable_background     = params.disable_background or false
+  instance._texture_bar_left       = params.texture_bar_left or nil
+  instance._texture_bar_right      = params.texture_bar_right or nil
+  instance._texture_bar_foreground = params.texture_bar_foreground or nil
+  instance._texture_bar_background = params.texture_bar_background or nil
 
 
   -- class variables
@@ -66,22 +72,22 @@ end
 function bar:init()
   local tempx, tempy
 
-  self._bar_left:alpha(self._background_alpha)
-  self._bar_left:color(unpack(self._background_color))
+  self._bar_left:alpha(self._left_right_alpha)
+  self._bar_left:color(unpack(self._left_right_color))
   self._bar_left:height(self._height)
   self._bar_left:width(2)
-  self._bar_left:path(windower.addon_path .. 'bar_left_1.png')
+  self._bar_left:path(self._texture_bar_left)
   self._bar_left:fit(false)
   self._bar_left:repeat_xy(1, 1)
   self._bar_left:pos(self._x - 2, self._y)
   self._bar_left:draggable(false)
   self._bar_left:hide()
 
-  self._bar_right:alpha(self._background_alpha)
-  self._bar_right:color(unpack(self._background_color))
+  self._bar_right:alpha(self._left_right_alpha)
+  self._bar_right:color(unpack(self._left_right_color))
   self._bar_right:height(self._height)
   self._bar_right:width(2)
-  self._bar_right:path(windower.addon_path .. 'bar_right_1.png')
+  self._bar_right:path(self._texture_bar_right)
   self._bar_right:fit(false)
   self._bar_right:repeat_xy(1, 1)
   self._bar_right:pos(self._x + self._width, self._y)
@@ -92,7 +98,7 @@ function bar:init()
   self._bar_bg:color(unpack(self._background_color))
   self._bar_bg:size(self._width, self._height)
   self._bar_bg:width(self._width)
-  self._bar_bg:path(windower.addon_path .. 'bar_bg_1.png')
+  self._bar_bg:path(self._texture_bar_background)
   self._bar_bg:fit(true)
   self._bar_bg:repeat_xy(1, 1)
   self._bar_bg:pos(self._x, self._y)
@@ -103,7 +109,7 @@ function bar:init()
   self._bar_fg:color(unpack(self._foreground_color))
   self._bar_fg:size(self._width, self._height)
   self._bar_fg:width(self._width)
-  self._bar_fg:path(windower.addon_path .. 'bar_fg_1.png')
+  self._bar_fg:path(self._texture_bar_foreground)
   self._bar_fg:fit(true)
   self._bar_fg:repeat_xy(1, 1)
   self._bar_fg:pos(self._x, self._y)

@@ -80,143 +80,126 @@ function ui:initialize(config)
 end
 
 function ui:create()
-  local center_x = (windower.get_windower_settings().ui_x_res / 2)
-  local center_y = (windower.get_windower_settings().ui_y_res / 2)
+  self:create_player()
+  self:create_pet()
+  self:create_target()
+  self:create_sub_target()
+  self:create_battle_target()
+  self:create_party()
+  self:create_alliance()
 
-  local start_pos_x, start_pos_y
+  self.isCreated = true
+end
 
-  ------------------------------------------------------------------
-  -- player
-  ------------------------------------------------------------------
-  start_pos_x = ((self.config.player.pos.relative_to == 'center') and (center_x + self.config.player.pos.x) or self.config.player.pos.x)
-  start_pos_y = ((self.config.player.pos.relative_to == 'center') and (center_y + self.config.player.pos.y) or self.config.player.pos.y)
-
-  -- player text
-  self.player.text = texts.new({
+-- reads a standard configuration for a nameplate to
+-- convert it into what a text object expects for creation
+function ui:create_text_from_config(config_element, start_x, start_y)
+  local config = {
     text = {
-      font = self.config.player.nameplate.text.font,
-      alpha = self.config.player.nameplate.text.alpha,
-      red = self.config.player.nameplate.text.red,
-      green = self.config.player.nameplate.text.green,
-      blue = self.config.player.nameplate.text.blue,
+      font = config_element.text.font,
+      alpha = config_element.text.alpha,
+      red = config_element.text.red,
+      green = config_element.text.green,
+      blue = config_element.text.blue,
       stroke = {
-        alpha = self.config.player.nameplate.text.stroke.alpha,
-        red = self.config.player.nameplate.text.stroke.red,
-        green = self.config.player.nameplate.text.stroke.green,
-        blue = self.config.player.nameplate.text.stroke.blue,
-        width = self.config.player.nameplate.text.stroke.width
+        alpha = config_element.text.stroke.alpha,
+        red = config_element.text.stroke.red,
+        green = config_element.text.stroke.green,
+        blue = config_element.text.stroke.blue,
+        width = config_element.text.stroke.width
       }
     },
     bg = {
       visible = false,
     },
     pos = {
-      x = start_pos_x + self.config.player.nameplate.rel_pos.x,
-      y = start_pos_y + self.config.player.nameplate.rel_pos.y
+      x = start_x + config_element.rel_pos.x,
+      y = start_y + config_element.rel_pos.y
     },
     flags = {
-      draggable = true
+      draggable = false
     },
     status = {
       visible = false
     }
-  })
+  }
 
-  self.player.health_bar = bar:new({
-    x = start_pos_x + self.config.player.health_bar.rel_pos.x,
-    y = start_pos_y + self.config.player.health_bar.rel_pos.y,
-    width = self.config.player.health_bar.width,
-    height = self.config.player.health_bar.height,
-    text_color = {
-      self.config.player.health_bar.text.red,
-      self.config.player.health_bar.text.green,
-      self.config.player.health_bar.text.blue
-    },
-    text_alpha = self.config.player.health_bar.text.alpha,
-    text_size = self.config.player.health_bar.text.size,
-    text_font = self.config.player.health_bar.text.font,
-    text_right_align = self.config.player.health_bar.text.right_aligned,
-    text_offset = self.config.player.health_bar.text.offset,
-    foreground_color = {
-      self.config.player.health_bar.foreground.red,
-      self.config.player.health_bar.foreground.green,
-      self.config.player.health_bar.foreground.blue
-    },
-    foreground_alpha = self.config.player.health_bar.foreground.alpha,
-    background_color = {
-      self.config.player.health_bar.background.red,
-      self.config.player.health_bar.background.green,
-      self.config.player.health_bar.background.blue
-    },
-    background_alpha = self.config.player.health_bar.background.alpha,
-    disable_text = self.config.player.health_bar.text.disabled,
-    disable_foreground = self.config.player.health_bar.foreground.disabled,
-    disable_background = self.config.player.health_bar.background.disabled
-  })
+  return config
+end
 
-  self.player.magic_bar = bar:new({
-    x = start_pos_x + self.config.player.magic_bar.rel_pos.x,
-    y = start_pos_y + self.config.player.magic_bar.rel_pos.y,
-    width = self.config.player.magic_bar.width,
-    height = self.config.player.magic_bar.height,
+-- reads a standard configuration for a bar to
+-- convert it into what a bar object expects for creation
+function ui:create_bar_from_config(config_element, start_x, start_y)
+  local config = {
+    x = start_x + config_element.rel_pos.x,
+    y = start_y + config_element.rel_pos.y,
+    width = config_element.width,
+    height = config_element.height,
     text_color = {
-      self.config.player.magic_bar.text.red,
-      self.config.player.magic_bar.text.green,
-      self.config.player.magic_bar.text.blue
+      config_element.text.red,
+      config_element.text.green,
+      config_element.text.blue
     },
-    text_alpha = self.config.player.magic_bar.text.alpha,
-    text_size = self.config.player.magic_bar.text.size,
-    text_font = self.config.player.magic_bar.text.font,
-    text_right_align = self.config.player.magic_bar.text.right_aligned,
-    text_offset = self.config.player.magic_bar.text.offset,
+    text_alpha = config_element.text.alpha,
+    text_size = config_element.text.size,
+    text_font = config_element.text.font,
+    text_right_align = config_element.text.right_aligned,
+    text_offset = config_element.text.offset,
     foreground_color = {
-      self.config.player.magic_bar.foreground.red,
-      self.config.player.magic_bar.foreground.green,
-      self.config.player.magic_bar.foreground.blue
+      config_element.foreground.red,
+      config_element.foreground.green,
+      config_element.foreground.blue
     },
-    foreground_alpha = self.config.player.magic_bar.foreground.alpha,
+    foreground_alpha = config_element.foreground.alpha,
     background_color = {
-      self.config.player.magic_bar.background.red,
-      self.config.player.magic_bar.background.green,
-      self.config.player.magic_bar.background.blue
+      config_element.background.red,
+      config_element.background.green,
+      config_element.background.blue
     },
-    background_alpha = self.config.player.magic_bar.background.alpha,
-    disable_text = self.config.player.magic_bar.text.disabled,
-    disable_foreground = self.config.player.magic_bar.foreground.disabled,
-    disable_background = self.config.player.magic_bar.background.disabled
-  })
+    background_alpha = config_element.background.alpha,
+    left_right_color = {
+      config_element.left_right_cap.red,
+      config_element.left_right_cap.green,
+      config_element.left_right_cap.blue
+    },
+    left_right_alpha = config_element.left_right_cap.alpha,
+    texture_bar_left = self.config.texture.bar_left,
+    texture_bar_right = self.config.texture.bar_right,
+    texture_bar_foreground = self.config.texture.bar_foreground,
+    texture_bar_background = self.config.texture.bar_background,
+    disable_text = config_element.text.disabled,
+    disable_foreground = config_element.foreground.disabled,
+    disable_background = config_element.background.disabled
+  }
 
-  self.player.tp_bar = bar:new({
-    x = start_pos_x + self.config.player.tp_bar.rel_pos.x,
-    y = start_pos_y + self.config.player.tp_bar.rel_pos.y,
-    width = self.config.player.tp_bar.width,
-    height = self.config.player.tp_bar.height,
-    text_color = {
-      self.config.player.tp_bar.text.red,
-      self.config.player.tp_bar.text.green,
-      self.config.player.tp_bar.text.blue
-    },
-    text_alpha = self.config.player.tp_bar.text.alpha,
-    text_size = self.config.player.tp_bar.text.size,
-    text_font = self.config.player.tp_bar.text.font,
-    text_right_align = self.config.player.tp_bar.text.right_aligned,
-    text_offset = self.config.player.tp_bar.text.offset,
-    foreground_color = {
-      self.config.player.tp_bar.foreground.red,
-      self.config.player.tp_bar.foreground.green,
-      self.config.player.tp_bar.foreground.blue
-    },
-    foreground_alpha = self.config.player.tp_bar.foreground.alpha,
-    background_color = {
-      self.config.player.tp_bar.background.red,
-      self.config.player.tp_bar.background.green,
-      self.config.player.tp_bar.background.blue
-    },
-    background_alpha = self.config.player.tp_bar.background.alpha,
-    disable_text = self.config.player.tp_bar.text.disabled,
-    disable_foreground = self.config.player.tp_bar.foreground.disabled,
-    disable_background = self.config.player.tp_bar.background.disabled
-  })
+  return config
+end
+
+function ui:create_player()
+  local center_x = (windower.get_windower_settings().ui_x_res / 2)
+  local center_y = (windower.get_windower_settings().ui_y_res / 2)
+
+  local start_pos_x, start_pos_y
+
+  start_pos_x = ((self.config.player.pos.relative_to == 'center') and (center_x + self.config.player.pos.x) or self.config.player.pos.x)
+  start_pos_y = ((self.config.player.pos.relative_to == 'center') and (center_y + self.config.player.pos.y) or self.config.player.pos.y)
+
+
+  self.player.text = texts.new(
+    self:create_text_from_config(self.config.player.nameplate, start_pos_x, start_pos_y)
+  )
+
+  self.player.health_bar = bar:new(
+    self:create_bar_from_config(self.config.player.health_bar, start_pos_x, start_pos_y)
+  )
+
+  self.player.magic_bar = bar:new(
+    self:create_bar_from_config(self.config.player.magic_bar, start_pos_x, start_pos_y)
+  )
+
+  self.player.tp_bar = bar:new(
+    self:create_bar_from_config(self.config.player.tp_bar, start_pos_x, start_pos_y)
+  )
 
   self.player.group = grouper.create_component_group(
     grouper.flatten({
@@ -232,139 +215,33 @@ function ui:create()
       self:register_handler(event, action, self.player.group, '<me>')
     end
   end
+end
 
-  ------------------------------------------------------------------
-  -- pet
-  ------------------------------------------------------------------
+function ui:create_pet()
+  local center_x = (windower.get_windower_settings().ui_x_res / 2)
+  local center_y = (windower.get_windower_settings().ui_y_res / 2)
+
+  local start_pos_x, start_pos_y
+
   start_pos_x = ((self.config.pet.pos.relative_to == 'center') and (center_x + self.config.pet.pos.x) or self.config.pet.pos.x)
   start_pos_y = ((self.config.pet.pos.relative_to == 'center') and (center_y + self.config.pet.pos.y) or self.config.pet.pos.y)
 
   -- pet text
-  self.pet.text = texts.new({
-    text = {
-      font = self.config.pet.nameplate.text.font,
-      alpha = self.config.pet.nameplate.text.alpha,
-      red = self.config.pet.nameplate.text.red,
-      green = self.config.pet.nameplate.text.green,
-      blue = self.config.pet.nameplate.text.blue,
-      stroke = {
-        alpha = self.config.pet.nameplate.text.stroke.alpha,
-        red = self.config.pet.nameplate.text.stroke.red,
-        green = self.config.pet.nameplate.text.stroke.green,
-        blue = self.config.pet.nameplate.text.stroke.blue,
-        width = self.config.pet.nameplate.text.stroke.width
-      }
-    },
-    bg = {
-      visible = false,
-    },
-    pos = {
-      x = start_pos_x + self.config.pet.nameplate.rel_pos.x,
-      y = start_pos_y + self.config.pet.nameplate.rel_pos.y
-    },
-    flags = {
-      draggable = false
-    },
-    status = {
-      visible = false
-    }
-  })
+  self.pet.text = texts.new(
+    self:create_text_from_config(self.config.pet.nameplate, start_pos_x, start_pos_y)
+  )
 
-  self.pet.health_bar = bar:new({
-    x = start_pos_x + self.config.pet.health_bar.rel_pos.x,
-    y = start_pos_y + self.config.pet.health_bar.rel_pos.y,
-    width = self.config.pet.health_bar.width,
-    height = self.config.pet.health_bar.height,
-    text_color = {
-      self.config.pet.health_bar.text.red,
-      self.config.pet.health_bar.text.green,
-      self.config.pet.health_bar.text.blue
-    },
-    text_alpha = self.config.pet.health_bar.text.alpha,
-    text_size = self.config.pet.health_bar.text.size,
-    text_font = self.config.pet.health_bar.text.font,
-    text_right_align = self.config.pet.health_bar.text.right_aligned,
-    text_offset = self.config.pet.health_bar.text.offset,
-    foreground_color = {
-      self.config.pet.health_bar.foreground.red,
-      self.config.pet.health_bar.foreground.green,
-      self.config.pet.health_bar.foreground.blue
-    },
-    foreground_alpha = self.config.pet.health_bar.foreground.alpha,
-    background_color = {
-      self.config.pet.health_bar.background.red,
-      self.config.pet.health_bar.background.green,
-      self.config.pet.health_bar.background.blue
-    },
-    background_alpha = self.config.pet.health_bar.background.alpha,
-    disable_text = self.config.pet.health_bar.text.disabled,
-    disable_foreground = self.config.pet.health_bar.foreground.disabled,
-    disable_background = self.config.pet.health_bar.background.disabled
-  })
+  self.pet.health_bar = bar:new(
+    self:create_bar_from_config(self.config.pet.health_bar, start_pos_x, start_pos_y)
+  )
 
-  self.pet.magic_bar = bar:new({
-    x = start_pos_x + self.config.pet.magic_bar.rel_pos.x,
-    y = start_pos_y + self.config.pet.magic_bar.rel_pos.y,
-    width = self.config.pet.magic_bar.width,
-    height = self.config.pet.magic_bar.height,
-    text_color = {
-      self.config.pet.magic_bar.text.red,
-      self.config.pet.magic_bar.text.green,
-      self.config.pet.magic_bar.text.blue
-    },
-    text_alpha = self.config.pet.magic_bar.text.alpha,
-    text_size = self.config.pet.magic_bar.text.size,
-    text_font = self.config.pet.magic_bar.text.font,
-    text_right_align = self.config.pet.magic_bar.text.right_aligned,
-    text_offset = self.config.pet.magic_bar.text.offset,
-    foreground_color = {
-      self.config.pet.magic_bar.foreground.red,
-      self.config.pet.magic_bar.foreground.green,
-      self.config.pet.magic_bar.foreground.blue
-    },
-    foreground_alpha = self.config.pet.magic_bar.foreground.alpha,
-    background_color = {
-      self.config.pet.magic_bar.background.red,
-      self.config.pet.magic_bar.background.green,
-      self.config.pet.magic_bar.background.blue
-    },
-    background_alpha = self.config.pet.magic_bar.background.alpha,
-    disable_text = self.config.pet.magic_bar.text.disabled,
-    disable_foreground = self.config.pet.magic_bar.foreground.disabled,
-    disable_background = self.config.pet.magic_bar.background.disabled
-  })
+  self.pet.magic_bar = bar:new(
+    self:create_bar_from_config(self.config.pet.magic_bar, start_pos_x, start_pos_y)
+  )
 
-  self.pet.tp_bar = bar:new({
-    x = start_pos_x + self.config.pet.tp_bar.rel_pos.x,
-    y = start_pos_y + self.config.pet.tp_bar.rel_pos.y,
-    width = self.config.pet.tp_bar.width,
-    height = self.config.pet.tp_bar.height,
-    text_color = {
-      self.config.pet.tp_bar.text.red,
-      self.config.pet.tp_bar.text.green,
-      self.config.pet.tp_bar.text.blue
-    },
-    text_alpha = self.config.pet.tp_bar.text.alpha,
-    text_size = self.config.pet.tp_bar.text.size,
-    text_font = self.config.pet.tp_bar.text.font,
-    text_right_align = self.config.pet.tp_bar.text.right_aligned,
-    text_offset = self.config.pet.tp_bar.text.offset,
-    foreground_color = {
-      self.config.pet.tp_bar.foreground.red,
-      self.config.pet.tp_bar.foreground.green,
-      self.config.pet.tp_bar.foreground.blue
-    },
-    foreground_alpha = self.config.pet.tp_bar.foreground.alpha,
-    background_color = {
-      self.config.pet.tp_bar.background.red,
-      self.config.pet.tp_bar.background.green,
-      self.config.pet.tp_bar.background.blue
-    },
-    background_alpha = self.config.pet.tp_bar.background.alpha,
-    disable_text = self.config.pet.tp_bar.text.disabled,
-    disable_foreground = self.config.pet.tp_bar.foreground.disabled,
-    disable_background = self.config.pet.tp_bar.background.disabled
-  })
+  self.pet.tp_bar = bar:new(
+    self:create_bar_from_config(self.config.pet.tp_bar, start_pos_x, start_pos_y)
+  )
 
   self.pet.group = grouper.create_component_group(
     grouper.flatten({
@@ -380,107 +257,30 @@ function ui:create()
       self:register_handler(event, action, self.pet.group, '<pet>')
     end
   end
+end
 
+function ui:create_target()
+  local center_x = (windower.get_windower_settings().ui_x_res / 2)
+  local center_y = (windower.get_windower_settings().ui_y_res / 2)
 
-  ------------------------------------------------------------------
-  -- target
-  ------------------------------------------------------------------
+  local start_pos_x, start_pos_y
+
   start_pos_x = ((self.config.target.pos.relative_to == 'center') and (center_x + self.config.target.pos.x) or self.config.target.pos.x)
   start_pos_y = ((self.config.target.pos.relative_to == 'center') and (center_y + self.config.target.pos.y) or self.config.target.pos.y)
 
   -- target text
-  self.target.text = texts.new({
-    text = {
-      font = self.config.target.nameplate.text.font,
-      alpha = self.config.target.nameplate.text.alpha,
-      red = self.config.target.nameplate.text.red,
-      green = self.config.target.nameplate.text.green,
-      blue = self.config.target.nameplate.text.blue,
-      stroke = {
-        alpha = self.config.target.nameplate.text.stroke.alpha,
-        red = self.config.target.nameplate.text.stroke.red,
-        green = self.config.target.nameplate.text.stroke.green,
-        blue = self.config.target.nameplate.text.stroke.blue,
-        width = self.config.target.nameplate.text.stroke.width
-      }
-    },
-    bg = {
-      visible = false,
-    },
-    pos = {
-      x = start_pos_x + self.config.target.nameplate.rel_pos.x,
-      y = start_pos_y + self.config.target.nameplate.rel_pos.y
-    },
-    flags = {
-      draggable = false
-    },
-    status = {
-      visible = false
-    }
-  })
+  self.target.text = texts.new(
+    self:create_text_from_config(self.config.target.nameplate, start_pos_x, start_pos_y)
+  )
 
-  self.target.health_bar = bar:new({
-    x = start_pos_x + self.config.target.health_bar.rel_pos.x,
-    y = start_pos_y + self.config.target.health_bar.rel_pos.y,
-    width = self.config.target.health_bar.width,
-    height = self.config.target.health_bar.height,
-    text_color = {
-      self.config.target.health_bar.text.red,
-      self.config.target.health_bar.text.green,
-      self.config.target.health_bar.text.blue
-    },
-    text_alpha = self.config.target.health_bar.text.alpha,
-    text_size = self.config.target.health_bar.text.size,
-    text_font = self.config.target.health_bar.text.font,
-    text_right_align = self.config.target.health_bar.text.right_aligned,
-    text_offset = self.config.target.health_bar.text.offset,
-    foreground_color = {
-      self.config.target.health_bar.foreground.red,
-      self.config.target.health_bar.foreground.green,
-      self.config.target.health_bar.foreground.blue
-    },
-    foreground_alpha = self.config.target.health_bar.foreground.alpha,
-    background_color = {
-      self.config.target.health_bar.background.red,
-      self.config.target.health_bar.background.green,
-      self.config.target.health_bar.background.blue
-    },
-    background_alpha = self.config.target.health_bar.background.alpha,
-    disable_text = self.config.target.health_bar.text.disabled,
-    disable_foreground = self.config.target.health_bar.foreground.disabled,
-    disable_background = self.config.target.health_bar.background.disabled
-  })
+  self.target.health_bar = bar:new(
+    self:create_bar_from_config(self.config.target.health_bar, start_pos_x, start_pos_y)
+  )
 
   -- target lock text
-  self.target.locked_text = texts.new({
-    text = {
-      font = self.config.target.locked_text.text.font,
-      alpha = self.config.target.locked_text.text.alpha,
-      red = self.config.target.locked_text.text.red,
-      green = self.config.target.locked_text.text.green,
-      blue = self.config.target.locked_text.text.blue,
-      stroke = {
-        alpha = self.config.target.locked_text.text.stroke.alpha,
-        red = self.config.target.locked_text.text.stroke.red,
-        green = self.config.target.locked_text.text.stroke.green,
-        blue = self.config.target.locked_text.text.stroke.blue,
-        width = self.config.target.locked_text.text.stroke.width
-      }
-    },
-    bg = {
-      visible = false,
-    },
-    pos = {
-      x = start_pos_x + self.config.target.locked_text.rel_pos.x,
-      y = start_pos_y + self.config.target.locked_text.rel_pos.y
-    },
-    flags = {
-      draggable = false
-    },
-    status = {
-      visible = false
-    }
-  })
+  self.target.locked_text = texts.new(
+    self:create_text_from_config(self.config.target.locked_text, start_pos_x, start_pos_y)
+  )
   self.target.locked_text:text('> LOCKED <')
 
   self.target.group = grouper.create_component_group(
@@ -495,75 +295,25 @@ function ui:create()
       self:register_handler(event, action, self.target.group, '<t>')
     end
   end
+end
 
-  ------------------------------------------------------------------
-  -- sub target
-  ------------------------------------------------------------------
+function ui:create_sub_target()
+  local center_x = (windower.get_windower_settings().ui_x_res / 2)
+  local center_y = (windower.get_windower_settings().ui_y_res / 2)
+
+  local start_pos_x, start_pos_y
+
   start_pos_x = ((self.config.sub_target.pos.relative_to == 'center') and (center_x + self.config.sub_target.pos.x) or self.config.sub_target.pos.x)
   start_pos_y = ((self.config.sub_target.pos.relative_to == 'center') and (center_y + self.config.sub_target.pos.y) or self.config.sub_target.pos.y)
 
   -- sub_target text
-  self.sub_target.text = texts.new({
-    text = {
-      font = self.config.sub_target.nameplate.text.font,
-      alpha = self.config.sub_target.nameplate.text.alpha,
-      red = self.config.sub_target.nameplate.text.red,
-      green = self.config.sub_target.nameplate.text.green,
-      blue = self.config.sub_target.nameplate.text.blue,
-      stroke = {
-        alpha = self.config.sub_target.nameplate.text.stroke.alpha,
-        red = self.config.sub_target.nameplate.text.stroke.red,
-        green = self.config.sub_target.nameplate.text.stroke.green,
-        blue = self.config.sub_target.nameplate.text.stroke.blue,
-        width = self.config.sub_target.nameplate.text.stroke.width
-      }
-    },
-    bg = {
-      visible = false,
-    },
-    pos = {
-      x = start_pos_x + self.config.sub_target.nameplate.rel_pos.x,
-      y = start_pos_y + self.config.sub_target.nameplate.rel_pos.y
-    },
-    flags = {
-      draggable = false
-    },
-    status = {
-      visible = false
-    }
-  })
+  self.sub_target.text = texts.new(
+    self:create_text_from_config(self.config.sub_target.nameplate, start_pos_x, start_pos_y)
+  )
 
-  self.sub_target.health_bar = bar:new({
-    x = start_pos_x + self.config.sub_target.health_bar.rel_pos.x,
-    y = start_pos_y + self.config.sub_target.health_bar.rel_pos.y,
-    width = self.config.sub_target.health_bar.width,
-    height = self.config.sub_target.health_bar.height,
-    text_color = {
-      self.config.sub_target.health_bar.text.red,
-      self.config.sub_target.health_bar.text.green,
-      self.config.sub_target.health_bar.text.blue
-    },
-    text_alpha = self.config.sub_target.health_bar.text.alpha,
-    text_size = self.config.sub_target.health_bar.text.size,
-    text_font = self.config.sub_target.health_bar.text.font,
-    text_right_align = self.config.sub_target.health_bar.text.right_aligned,
-    text_offset = self.config.sub_target.health_bar.text.offset,
-    foreground_color = {
-      self.config.sub_target.health_bar.foreground.red,
-      self.config.sub_target.health_bar.foreground.green,
-      self.config.sub_target.health_bar.foreground.blue
-    },
-    foreground_alpha = self.config.sub_target.health_bar.foreground.alpha,
-    background_color = {
-      self.config.sub_target.health_bar.background.red,
-      self.config.sub_target.health_bar.background.green,
-      self.config.sub_target.health_bar.background.blue
-    },
-    background_alpha = self.config.sub_target.health_bar.background.alpha,
-    disable_text = self.config.sub_target.health_bar.text.disabled,
-    disable_foreground = self.config.sub_target.health_bar.foreground.disabled,
-    disable_background = self.config.sub_target.health_bar.background.disabled
-  })
+  self.sub_target.health_bar = bar:new(
+    self:create_bar_from_config(self.config.sub_target.health_bar, start_pos_x, start_pos_y)
+  )
 
   self.sub_target.group = grouper.create_component_group(
     grouper.flatten({
@@ -577,44 +327,22 @@ function ui:create()
       self:register_handler(event, action, self.sub_target.group, '<st>')
     end
   end
+end
 
-  ------------------------------------------------------------------
-  -- battle target
-  ------------------------------------------------------------------
+function ui:create_battle_target()
+  local center_x = (windower.get_windower_settings().ui_x_res / 2)
+  local center_y = (windower.get_windower_settings().ui_y_res / 2)
+
+  local start_pos_x, start_pos_y
+
   -- battle target text
   start_pos_x = ((self.config.battle_target.pos.relative_to == 'center') and (center_x + self.config.battle_target.pos.x) or self.config.battle_target.pos.x)
   start_pos_y = ((self.config.battle_target.pos.relative_to == 'center') and (center_y + self.config.battle_target.pos.y) or self.config.battle_target.pos.y)
 
   -- battle_target text
-  self.battle_target.text = texts.new({
-    text = {
-      font = self.config.battle_target.nameplate.text.font,
-      alpha = self.config.battle_target.nameplate.text.alpha,
-      red = self.config.battle_target.nameplate.text.red,
-      green = self.config.battle_target.nameplate.text.green,
-      blue = self.config.battle_target.nameplate.text.blue,
-      stroke = {
-        alpha = self.config.battle_target.nameplate.text.stroke.alpha,
-        red = self.config.battle_target.nameplate.text.stroke.red,
-        green = self.config.battle_target.nameplate.text.stroke.green,
-        blue = self.config.battle_target.nameplate.text.stroke.blue,
-        width = self.config.battle_target.nameplate.text.stroke.width
-      }
-    },
-    bg = {
-      visible = false,
-    },
-    pos = {
-      x = start_pos_x + self.config.battle_target.nameplate.rel_pos.x,
-      y = start_pos_y + self.config.battle_target.nameplate.rel_pos.y
-    },
-    flags = {
-      draggable = false
-    },
-    status = {
-      visible = false
-    }
-  })
+  self.battle_target.text = texts.new(
+    self:create_text_from_config(self.config.battle_target.nameplate, start_pos_x, start_pos_y)
+  )
 
   -- battle target action handlers
   self.battle_target.group = grouper.create_component_group(
@@ -628,10 +356,14 @@ function ui:create()
       self:register_handler(event, action, self.battle_target.group, '<bt>')
     end
   end
+end
 
-  ------------------------------------------------------------------
-  -- party
-  ------------------------------------------------------------------
+function ui:create_party()
+  local center_x = (windower.get_windower_settings().ui_x_res / 2)
+  local center_y = (windower.get_windower_settings().ui_y_res / 2)
+
+  local start_pos_x, start_pos_y
+
   start_pos_x = ((self.config.party.pos.relative_to == 'center') and (center_x + self.config.party.pos.x) or self.config.party.pos.x)
   start_pos_y = ((self.config.party.pos.relative_to == 'center') and (center_y + self.config.party.pos.y) or self.config.party.pos.y)
 
@@ -640,132 +372,21 @@ function ui:create()
     local party_pos_x = start_pos_x + ((i - 1) * self.config.party.pos.offset_x)
     local party_pos_y = start_pos_y + ((i - 1) * self.config.party.pos.offset_y)
 
-    self.party[key].text = texts.new({
-      text = {
-        font = self.config.party.nameplate.text.font,
-        alpha = self.config.party.nameplate.text.alpha,
-        red = self.config.party.nameplate.text.red,
-        green = self.config.party.nameplate.text.green,
-        blue = self.config.party.nameplate.text.blue,
-        stroke = {
-          alpha = self.config.party.nameplate.text.stroke.alpha,
-          red = self.config.party.nameplate.text.stroke.red,
-          green = self.config.party.nameplate.text.stroke.green,
-          blue = self.config.party.nameplate.text.stroke.blue,
-          width = self.config.party.nameplate.text.stroke.width
-        }
-      },
-      bg = {
-        visible = false,
-      },
-      pos = {
-        x = party_pos_x + self.config.party.nameplate.rel_pos.x,
-        y = party_pos_y + self.config.party.nameplate.rel_pos.y
-      },
-      flags = {
-        draggable = true
-      },
-      status = {
-        visible = false
-      }
-    })
+    self.party[key].text = texts.new(
+      self:create_text_from_config(self.config.party.nameplate, party_pos_x, party_pos_y)
+    )
 
-    self.party[key].health_bar = bar:new({
-      x = party_pos_x + self.config.party.health_bar.rel_pos.x,
-      y = party_pos_y + self.config.party.health_bar.rel_pos.y,
-      width = self.config.party.health_bar.width,
-      height = self.config.party.health_bar.height,
-      text_color = {
-        self.config.party.health_bar.text.red,
-        self.config.party.health_bar.text.green,
-        self.config.party.health_bar.text.blue
-      },
-      text_alpha = self.config.party.health_bar.text.alpha,
-      text_size = self.config.party.health_bar.text.size,
-      text_font = self.config.party.health_bar.text.font,
-      text_right_align = self.config.party.health_bar.text.right_aligned,
-      text_offset = self.config.party.health_bar.text.offset,
-      foreground_color = {
-        self.config.party.health_bar.foreground.red,
-        self.config.party.health_bar.foreground.green,
-        self.config.party.health_bar.foreground.blue
-      },
-      foreground_alpha = self.config.party.health_bar.foreground.alpha,
-      background_color = {
-        self.config.party.health_bar.background.red,
-        self.config.party.health_bar.background.green,
-        self.config.party.health_bar.background.blue
-      },
-      background_alpha = self.config.party.health_bar.background.alpha,
-      disable_text = self.config.party.health_bar.text.disabled,
-      disable_foreground = self.config.party.health_bar.foreground.disabled,
-      disable_background = self.config.party.health_bar.background.disabled
-    })
+    self.party[key].health_bar = bar:new(
+      self:create_bar_from_config(self.config.party.health_bar, party_pos_x, party_pos_y)
+    )
 
-    self.party[key].magic_bar = bar:new({
-      x = party_pos_x + self.config.party.magic_bar.rel_pos.x,
-      y = party_pos_y + self.config.party.magic_bar.rel_pos.y,
-      width = self.config.party.magic_bar.width,
-      height = self.config.party.magic_bar.height,
-      text_color = {
-        self.config.party.magic_bar.text.red,
-        self.config.party.magic_bar.text.green,
-        self.config.party.magic_bar.text.blue
-      },
-      text_alpha = self.config.party.magic_bar.text.alpha,
-      text_size = self.config.party.magic_bar.text.size,
-      text_font = self.config.party.magic_bar.text.font,
-      text_right_align = self.config.party.magic_bar.text.right_aligned,
-      text_offset = self.config.party.magic_bar.text.offset,
-      foreground_color = {
-        self.config.party.magic_bar.foreground.red,
-        self.config.party.magic_bar.foreground.green,
-        self.config.party.magic_bar.foreground.blue
-      },
-      foreground_alpha = self.config.party.magic_bar.foreground.alpha,
-      background_color = {
-        self.config.party.magic_bar.background.red,
-        self.config.party.magic_bar.background.green,
-        self.config.party.magic_bar.background.blue
-      },
-      background_alpha = self.config.party.magic_bar.background.alpha,
-      disable_text = self.config.party.magic_bar.text.disabled,
-      disable_foreground = self.config.party.magic_bar.foreground.disabled,
-      disable_background = self.config.party.magic_bar.background.disabled
-    })
+    self.party[key].magic_bar = bar:new(
+      self:create_bar_from_config(self.config.party.magic_bar, party_pos_x, party_pos_y)
+    )
 
-    self.party[key].tp_bar = bar:new({
-      x = party_pos_x + self.config.party.tp_bar.rel_pos.x,
-      y = party_pos_y + self.config.party.tp_bar.rel_pos.y,
-      width = self.config.party.tp_bar.width,
-      height = self.config.party.tp_bar.height,
-      text_color = {
-        self.config.party.tp_bar.text.red,
-        self.config.party.tp_bar.text.green,
-        self.config.party.tp_bar.text.blue
-      },
-      text_alpha = self.config.party.tp_bar.text.alpha,
-      text_size = self.config.party.tp_bar.text.size,
-      text_font = self.config.party.tp_bar.text.font,
-      text_right_align = self.config.party.tp_bar.text.right_aligned,
-      text_offset = self.config.party.tp_bar.text.offset,
-
-      foreground_color = {
-        self.config.party.tp_bar.foreground.red,
-        self.config.party.tp_bar.foreground.green,
-        self.config.party.tp_bar.foreground.blue
-      },
-      foreground_alpha = self.config.party.tp_bar.foreground.alpha,
-      background_color = {
-        self.config.party.tp_bar.background.red,
-        self.config.party.tp_bar.background.green,
-        self.config.party.tp_bar.background.blue
-      },
-      background_alpha = self.config.party.tp_bar.background.alpha,
-      disable_text = self.config.party.tp_bar.text.disabled,
-      disable_foreground = self.config.party.tp_bar.foreground.disabled,
-      disable_background = self.config.party.tp_bar.background.disabled
-    })
+    self.party[key].tp_bar = bar:new(
+      self:create_bar_from_config(self.config.party.tp_bar, party_pos_x, party_pos_y)
+    )
 
     self.party[key].group = grouper.create_component_group(
       grouper.flatten({
@@ -782,10 +403,14 @@ function ui:create()
       end
     end
   end
+end
 
-  ------------------------------------------------------------------
-  -- alliance
-  ------------------------------------------------------------------
+function ui:create_alliance()
+  local center_x = (windower.get_windower_settings().ui_x_res / 2)
+  local center_y = (windower.get_windower_settings().ui_y_res / 2)
+
+  local start_pos_x, start_pos_y
+
   start_pos_x = ((self.config.alliance.pos.relative_to == 'center') and (center_x + self.config.alliance.pos.x) or self.config.alliance.pos.x)
   start_pos_y = ((self.config.alliance.pos.relative_to == 'center') and (center_y + self.config.alliance.pos.y) or self.config.alliance.pos.y)
 
@@ -809,132 +434,21 @@ function ui:create()
     -- local alliance_pos_x = start_pos_x + ((n - 1) * self.config.alliance.pos.offset_x)
     -- local alliance_pos_y = start_pos_y + ((n - 1) * self.config.alliance.pos.offset_y)
 
-    self.alliance[key].text = texts.new({
-      text = {
-        font = self.config.alliance.nameplate.text.font,
-        alpha = self.config.alliance.nameplate.text.alpha,
-        red = self.config.alliance.nameplate.text.red,
-        green = self.config.alliance.nameplate.text.green,
-        blue = self.config.alliance.nameplate.text.blue,
-        stroke = {
-          alpha = self.config.alliance.nameplate.text.stroke.alpha,
-          red = self.config.alliance.nameplate.text.stroke.red,
-          green = self.config.alliance.nameplate.text.stroke.green,
-          blue = self.config.alliance.nameplate.text.stroke.blue,
-          width = self.config.alliance.nameplate.text.stroke.width
-        }
-      },
-      bg = {
-        visible = false,
-      },
-      pos = {
-        x = alliance_pos_x + self.config.alliance.nameplate.rel_pos.x,
-        y = alliance_pos_y + self.config.alliance.nameplate.rel_pos.y
-      },
-      flags = {
-        draggable = true
-      },
-      status = {
-        visible = false
-      }
-    })
+    self.alliance[key].text = texts.new(
+      self:create_text_from_config(self.config.alliance.nameplate, alliance_pos_x, alliance_pos_y)
+    )
 
-    self.alliance[key].health_bar = bar:new({
-      x = alliance_pos_x + self.config.alliance.health_bar.rel_pos.x,
-      y = alliance_pos_y + self.config.alliance.health_bar.rel_pos.y,
-      width = self.config.alliance.health_bar.width,
-      height = self.config.alliance.health_bar.height,
-      text_color = {
-        self.config.alliance.health_bar.text.red,
-        self.config.alliance.health_bar.text.green,
-        self.config.alliance.health_bar.text.blue
-      },
-      text_alpha = self.config.alliance.health_bar.text.alpha,
-      text_size = self.config.alliance.health_bar.text.size,
-      text_font = self.config.alliance.health_bar.text.font,
-      text_right_align = self.config.alliance.health_bar.text.right_aligned,
-      text_offset = self.config.alliance.health_bar.text.offset,
-      foreground_color = {
-        self.config.alliance.health_bar.foreground.red,
-        self.config.alliance.health_bar.foreground.green,
-        self.config.alliance.health_bar.foreground.blue
-      },
-      foreground_alpha = self.config.alliance.health_bar.foreground.alpha,
-      background_color = {
-        self.config.alliance.health_bar.background.red,
-        self.config.alliance.health_bar.background.green,
-        self.config.alliance.health_bar.background.blue
-      },
-      background_alpha = self.config.alliance.health_bar.background.alpha,
-      disable_text = self.config.alliance.health_bar.text.disabled,
-      disable_foreground = self.config.alliance.health_bar.foreground.disabled,
-      disable_background = self.config.alliance.health_bar.background.disabled
-    })
+    self.alliance[key].health_bar = bar:new(
+      self:create_bar_from_config(self.config.alliance.health_bar, alliance_pos_x, alliance_pos_y)
+    )
 
-    self.alliance[key].magic_bar = bar:new({
-      x = alliance_pos_x + self.config.alliance.magic_bar.rel_pos.x,
-      y = alliance_pos_y + self.config.alliance.magic_bar.rel_pos.y,
-      width = self.config.alliance.magic_bar.width,
-      height = self.config.alliance.magic_bar.height,
-      text_color = {
-        self.config.alliance.magic_bar.text.red,
-        self.config.alliance.magic_bar.text.green,
-        self.config.alliance.magic_bar.text.blue
-      },
-      text_alpha = self.config.alliance.magic_bar.text.alpha,
-      text_size = self.config.alliance.magic_bar.text.size,
-      text_font = self.config.alliance.magic_bar.text.font,
-      text_right_align = self.config.alliance.magic_bar.text.right_aligned,
-      text_offset = self.config.alliance.magic_bar.text.offset,
-      foreground_color = {
-        self.config.alliance.magic_bar.foreground.red,
-        self.config.alliance.magic_bar.foreground.green,
-        self.config.alliance.magic_bar.foreground.blue
-      },
-      foreground_alpha = self.config.alliance.magic_bar.foreground.alpha,
-      background_color = {
-        self.config.alliance.magic_bar.background.red,
-        self.config.alliance.magic_bar.background.green,
-        self.config.alliance.magic_bar.background.blue
-      },
-      background_alpha = self.config.alliance.magic_bar.background.alpha,
-      disable_text = self.config.alliance.magic_bar.text.disabled,
-      disable_foreground = self.config.alliance.magic_bar.foreground.disabled,
-      disable_background = self.config.alliance.magic_bar.background.disabled
-    })
+    self.alliance[key].magic_bar = bar:new(
+      self:create_bar_from_config(self.config.alliance.magic_bar, alliance_pos_x, alliance_pos_y)
+    )
 
-    self.alliance[key].tp_bar = bar:new({
-      x = alliance_pos_x + self.config.alliance.tp_bar.rel_pos.x,
-      y = alliance_pos_y + self.config.alliance.tp_bar.rel_pos.y,
-      width = self.config.alliance.tp_bar.width,
-      height = self.config.alliance.tp_bar.height,
-      text_color = {
-        self.config.alliance.tp_bar.text.red,
-        self.config.alliance.tp_bar.text.green,
-        self.config.alliance.tp_bar.text.blue
-      },
-      text_alpha = self.config.alliance.tp_bar.text.alpha,
-      text_size = self.config.alliance.tp_bar.text.size,
-      text_font = self.config.alliance.tp_bar.text.font,
-      text_right_align = self.config.alliance.tp_bar.text.right_aligned,
-      text_offset = self.config.alliance.tp_bar.text.offset,
-
-      foreground_color = {
-        self.config.alliance.tp_bar.foreground.red,
-        self.config.alliance.tp_bar.foreground.green,
-        self.config.alliance.tp_bar.foreground.blue
-      },
-      foreground_alpha = self.config.alliance.tp_bar.foreground.alpha,
-      background_color = {
-        self.config.alliance.tp_bar.background.red,
-        self.config.alliance.tp_bar.background.green,
-        self.config.alliance.tp_bar.background.blue
-      },
-      background_alpha = self.config.alliance.tp_bar.background.alpha,
-      disable_text = self.config.alliance.tp_bar.text.disabled,
-      disable_foreground = self.config.alliance.tp_bar.foreground.disabled,
-      disable_background = self.config.alliance.tp_bar.background.disabled
-    })
+    self.alliance[key].tp_bar = bar:new(
+      self:create_bar_from_config(self.config.alliance.tp_bar, alliance_pos_x, alliance_pos_y)
+    )
 
     self.alliance[key].group = grouper.create_component_group(
       grouper.flatten({
@@ -953,8 +467,6 @@ function ui:create()
 
     n = n + 1
   end
-
-  self.isCreated = true
 end
 
 function ui:register_handler(event, action, group_object, target)
@@ -1503,9 +1015,14 @@ function ui:update_party()
 end
 
 function ui:update_party_frame(element, party_member)
+  local short_name = party_member.name
+  if #party_member.name > 12 then
+    short_name = party_member.name:sub(1, 12) .. "..."
+  end
+
   if party_member.mob == nil then
     -- party member in another zone
-    local temp_name = party_member.name .. '\n   ~ ' .. res.zones[party_member.zone].search
+    local temp_name = short_name .. '\n   ~ ' .. res.zones[party_member.zone].search
     if temp_name ~= element.text:text() then
       element.text:text(temp_name)
       element.missing_bar_data = true
@@ -1513,39 +1030,56 @@ function ui:update_party_frame(element, party_member)
     end
   else
     -- party member is in our zone
-    if party_member.name ~= element.text:text() then
-      element.text:text(party_member.name)
+    if short_name ~= element.text:text() then
+      element.text:text(short_name)
       element.missing_bar_data = false
       element.group:calculate_bounding_box(0.1)
+    end
 
-      -- set bar size and text
-      element.health_bar:text(tostring(party_member.hp))
-      element.health_bar:fill(party_member.hpp / 100)
-      element.health_bar:text_color(unpack(get_hp_text_color(party_member.hpp)))
+    -- set bar size and text
+    element.health_bar:text(tostring(party_member.hp))
+    element.health_bar:fill(party_member.hpp / 100)
+    element.health_bar:text_color(unpack(get_hp_text_color(party_member.hpp)))
 
 
-      element.magic_bar:text(tostring(party_member.mp))
-      element.magic_bar:fill(party_member.mpp / 100)
+    element.magic_bar:text(tostring(party_member.mp))
+    element.magic_bar:fill(party_member.mpp / 100)
 
-      element.tp_bar:text(tostring(party_member.tp))
-      element.tp_bar:fill(math.min(1000, party_member.tp) / 1000)
+    element.tp_bar:text(tostring(party_member.tp))
+    element.tp_bar:fill(math.min(1000, party_member.tp) / 1000)
 
-      if party_member.tp >= 1000 then
-        element.tp_bar:color(self.config.party.tp_bar.foreground.full_red,
-          self.config.party.tp_bar.foreground.full_green,
-          self.config
-          .party.tp_bar.foreground.full_blue)
-      else
-        element.tp_bar:color(self.config.party.tp_bar.foreground.red, self.config.party.tp_bar.foreground.green,
-          self.config
-          .party.tp_bar.foreground.blue)
-      end
+    if party_member.tp >= 1000 then
+      element.tp_bar:color(self.config.party.tp_bar.foreground.full_red,
+        self.config.party.tp_bar.foreground.full_green,
+        self.config
+        .party.tp_bar.foreground.full_blue)
+    else
+      element.tp_bar:color(self.config.party.tp_bar.foreground.red, self.config.party.tp_bar.foreground.green,
+        self.config
+        .party.tp_bar.foreground.blue)
     end
   end
 end
 
 function ui:update_alliance()
   local alliance = windower.ffxi.get_party()
+
+  -- fake
+  alliance['a10'] = alliance['p2']
+  alliance['a11'] = alliance['p2']
+  alliance['a12'] = alliance['p2']
+  alliance['a13'] = alliance['p2']
+  alliance['a14'] = alliance['p2']
+  alliance['a15'] = alliance['p2']
+
+  alliance['a20'] = alliance['p3']
+  alliance['a21'] = alliance['p3']
+  alliance['a22'] = alliance['p3']
+  alliance['a23'] = alliance['p3']
+  alliance['a24'] = alliance['p3']
+  alliance['a25'] = alliance['p3']
+  
+  --fake
 
   local should_show = {
     a10 = false,
@@ -1626,9 +1160,14 @@ function ui:update_alliance()
 end
 
 function ui:update_alliance_frame(element, alliance_member)
+  local short_name = alliance_member.name
+  if #alliance_member.name > 7 then
+    short_name = alliance_member.name:sub(1, 7) .. "..."
+  end
+
   if alliance_member.mob == nil then
     -- alliance member in another zone
-    local temp_name = alliance_member.name .. '\n~' .. res.zones[alliance_member.zone].search:sub(1, 7)
+    local temp_name = short_name .. '\n~' .. res.zones[alliance_member.zone].search:sub(1, 7)
     if temp_name ~= element.text:text() then
       element.text:text(temp_name)
       element.missing_bar_data = true
@@ -1636,33 +1175,33 @@ function ui:update_alliance_frame(element, alliance_member)
     end
   else
     -- alliance member is in our zone
-    if alliance_member.name ~= element.text:text() then
-      element.text:text(alliance_member.name)
+    if short_name ~= element.text:text() then
+      element.text:text(short_name)
       element.missing_bar_data = false
       element.group:calculate_bounding_box(0.1)
+    end
 
-      -- set bar size and text
-      element.health_bar:text(tostring(alliance_member.hp))
-      element.health_bar:fill(alliance_member.hpp / 100)
-      element.health_bar:text_color(unpack(get_hp_text_color(alliance_member.hpp)))
+    -- set bar size and text
+    element.health_bar:text(tostring(alliance_member.hp))
+    element.health_bar:fill(alliance_member.hpp / 100)
+    element.health_bar:text_color(unpack(get_hp_text_color(alliance_member.hpp)))
 
 
-      element.magic_bar:text(tostring(alliance_member.mp))
-      element.magic_bar:fill(alliance_member.mpp / 100)
+    element.magic_bar:text(tostring(alliance_member.mp))
+    element.magic_bar:fill(alliance_member.mpp / 100)
 
-      element.tp_bar:text(tostring(alliance_member.tp))
-      element.tp_bar:fill(math.min(1000, alliance_member.tp) / 1000)
+    element.tp_bar:text(tostring(alliance_member.tp))
+    element.tp_bar:fill(math.min(1000, alliance_member.tp) / 1000)
 
-      if alliance_member.tp >= 1000 then
-        element.tp_bar:color(self.config.alliance.tp_bar.foreground.full_red,
-          self.config.alliance.tp_bar.foreground.full_green,
-          self.config
-          .alliance.tp_bar.foreground.full_blue)
-      else
-        element.tp_bar:color(self.config.alliance.tp_bar.foreground.red, self.config.alliance.tp_bar.foreground.green,
-          self.config
-          .alliance.tp_bar.foreground.blue)
-      end
+    if alliance_member.tp >= 1000 then
+      element.tp_bar:color(self.config.alliance.tp_bar.foreground.full_red,
+        self.config.alliance.tp_bar.foreground.full_green,
+        self.config
+        .alliance.tp_bar.foreground.full_blue)
+    else
+      element.tp_bar:color(self.config.alliance.tp_bar.foreground.red, self.config.alliance.tp_bar.foreground.green,
+        self.config
+        .alliance.tp_bar.foreground.blue)
     end
   end
 end

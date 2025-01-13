@@ -1064,23 +1064,6 @@ end
 function ui:update_alliance()
   local alliance = windower.ffxi.get_party()
 
-  -- fake
-  alliance['a10'] = alliance['p2']
-  alliance['a11'] = alliance['p2']
-  alliance['a12'] = alliance['p2']
-  alliance['a13'] = alliance['p2']
-  alliance['a14'] = alliance['p2']
-  alliance['a15'] = alliance['p2']
-
-  alliance['a20'] = alliance['p3']
-  alliance['a21'] = alliance['p3']
-  alliance['a22'] = alliance['p3']
-  alliance['a23'] = alliance['p3']
-  alliance['a24'] = alliance['p3']
-  alliance['a25'] = alliance['p3']
-  
-  --fake
-
   local should_show = {
     a10 = false,
     a11 = false,

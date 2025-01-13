@@ -27,7 +27,7 @@
 
 _addon.name = 'ErisUnitFrames'
 _addon.author = 'Sabarjp'
-_addon.version = '1.0'
+_addon.version = '1.1'
 _addon.language = 'english'
 _addon.commands = {}
 

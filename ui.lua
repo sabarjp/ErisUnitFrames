@@ -1063,7 +1063,7 @@ end
 
 function ui:update_alliance()
   local alliance = windower.ffxi.get_party()
-
+  
   local should_show = {
     a10 = false,
     a11 = false,

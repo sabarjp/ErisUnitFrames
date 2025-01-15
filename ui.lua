@@ -950,6 +950,8 @@ end
 
 function ui:update_party()
   local party = windower.ffxi.get_party()
+  local player = windower.ffxi.get_player()
+
   local should_show = {
     p0 = false,
     p1 = false,
@@ -1063,6 +1065,7 @@ end
 
 function ui:update_alliance()
   local alliance = windower.ffxi.get_party()
+  local player = windower.ffxi.get_player()
 
   local should_show = {
     a10 = false,

@@ -62,8 +62,9 @@ function bar:new(params)
   instance._texture_bar_foreground = params.texture_bar_foreground or nil
   instance._texture_bar_background = params.texture_bar_background or nil
 
-
   -- class variables
+  instance.fill_amount             = -1 -- track the fill amount so we know when to re-render
+
 
   instance:init()
   return instance
@@ -99,7 +100,7 @@ function bar:init()
   self._bar_bg:size(self._width, self._height)
   self._bar_bg:width(self._width)
   self._bar_bg:path(self._texture_bar_background)
-  self._bar_bg:fit(true)
+  self._bar_bg:fit(false)
   self._bar_bg:repeat_xy(1, 1)
   self._bar_bg:pos(self._x, self._y)
   self._bar_bg:draggable(false)
@@ -110,7 +111,7 @@ function bar:init()
   self._bar_fg:size(self._width, self._height)
   self._bar_fg:width(self._width)
   self._bar_fg:path(self._texture_bar_foreground)
-  self._bar_fg:fit(true)
+  self._bar_fg:fit(false)
   self._bar_fg:repeat_xy(1, 1)
   self._bar_fg:pos(self._x, self._y)
   self._bar_fg:draggable(false)
@@ -142,8 +143,10 @@ function bar:pos(x, y)
   self._y = y
 
   -- reposition
-  self._bar_bg:pos(self.x, self.y)
-  self._bar_fg:pos(self.x, self.y)
+  self._bar_bg:pos(self._x, self._y)
+  self._bar_fg:pos(self._x, self._y)
+  self._bar_left:pos(self._x - 2, self._y)
+  self._bar_right:pos(self._x + self._width, self._y)
   local tempx, tempy = self._bar_fg:pos()
   self._bar_text:pos(self:justX(tempx) + self._text_offset.x, tempy - 3 + self._text_offset.y)
 end
@@ -156,8 +159,10 @@ function bar:pos_x(x)
   self._x = x
 
   -- reposition
-  self._bar_bg:pos(self.x, self.y)
-  self._bar_fg:pos(self.x, self.y)
+  self._bar_bg:pos(self._x, self._y)
+  self._bar_fg:pos(self._x, self._y)
+  self._bar_left:pos(self._x - 2, self._y)
+  self._bar_right:pos(self._x + self._width, self._y)
   local tempx, tempy = self._bar_fg:pos()
   self._bar_text:pos(self:justX(tempx) + self._text_offset.x, tempy - 3 + self._text_offset.y)
 end
@@ -170,8 +175,10 @@ function bar:pos_y(y)
   self._y = y
 
   -- reposition
-  self._bar_bg:pos(self.x, self.y)
-  self._bar_fg:pos(self.x, self.y)
+  self._bar_bg:pos(self._x, self._y)
+  self._bar_fg:pos(self._x, self._y)
+  self._bar_left:pos(self._x - 2, self._y)
+  self._bar_right:pos(self._x + self._width, self._y)
   local tempx, tempy = self._bar_fg:pos()
   self._bar_text:pos(self:justX(tempx) + self._text_offset.x, tempy - 3 + self._text_offset.y)
 end
@@ -201,21 +208,33 @@ function bar:width(w)
 end
 
 function bar:color(r, g, b)
+  if not r then
+    return { self._bar_fg:color() }
+  end
+
   self._bar_fg:color(r, g, b)
 end
 
 function bar:text_color(r, g, b)
+  if not r then
+    return { self._bar_text:color() }
+  end
+
   self._bar_text:color(r, g, b)
 end
 
 function bar:components()
-  return { self._bar_text, self._bar_fg, self._bar_bg }
+  return { self._bar_text, self._bar_fg, self._bar_bg, self._bar_left, self._bar_right }
 end
 
 -- show a fill of the bar from 0 to 1.0, percent/ratio
 function bar:fill(r)
-  self:width(self:width())
-  self._bar_fg:width(self._width * r)
+  if not r then
+    return self.fill_amount
+  end
+
+  self.fill_amount = r
+  self._bar_fg:width(self._width * self.fill_amount)
 end
 
 function bar:visible()

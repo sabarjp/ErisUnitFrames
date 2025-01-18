@@ -2,16 +2,15 @@
 buffs = {}
 buffs.__index = buffs
 
+-- Global singleton-style tooltip that will be shared among all buffs
+buff_tooltip = nil
+
 -- Constructor
 function buffs:new(params)
   local instance             = setmetatable({}, buffs)
 
   -- internal variables
   instance._buffs            = {} -- keyed on buff id
-
-  instance._tooltip          = texts.new({
-    flags = { draggable = false },
-  })
 
   -- if we are currently hovering on a buff, it is this one
   instance._hovering_on_buff = {}
@@ -32,16 +31,30 @@ function buffs:new(params)
 end
 
 function buffs:init()
-  self._tooltip:font('Calibri')
-  self._tooltip:size(12)
-  self._tooltip:alpha(255)
-  self._tooltip:stroke_transparency(0.2)
-  self._tooltip:stroke_width(1.5)
-  self._tooltip:stroke_color(0, 0, 0)
-  self._tooltip:color(255, 255, 255)
-  self._tooltip:bg_visible(false)
-  self._tooltip:draggable(false)
-  self._tooltip:hide()
+
+end
+
+-- must be ran after the rest of the UI is created for layering to work correctly.
+function buffs:create_global_tooltip()
+  if buff_tooltip == nil then
+    buff_tooltip = texts.new({
+      flags = { draggable = false },
+    })
+
+    buff_tooltip:font('Calibri')
+    buff_tooltip:size(12)
+    buff_tooltip:alpha(255)
+    buff_tooltip:stroke_transparency(0.2)
+    buff_tooltip:stroke_width(1.5)
+    buff_tooltip:stroke_color(0, 0, 0)
+    buff_tooltip:color(255, 255, 255)
+    buff_tooltip:bg_alpha(128)
+    buff_tooltip:bg_color(0, 0, 0)
+    buff_tooltip:bg_visible(true)
+    buff_tooltip:pad(2)
+    buff_tooltip:draggable(false)
+    buff_tooltip:hide()
+  end
 end
 
 function buffs:destroy()
@@ -125,16 +138,21 @@ local function update_tooltip(tooltip, hovering_buff)
     readable_time = string.format("%.0f sec", hovering_buff.remaining_time)
   end
 
-  if buff_name == spell_name then
-    tooltip:text(string.format("%s\n%s", buff_name, readable_time))
-  else
-    tooltip:text(string.format("%s (%s)\n%s", buff_name, spell_name, readable_time))
+  if tooltip then
+    if buff_name == spell_name then
+      tooltip:text(string.format("%s\n%s", buff_name, readable_time))
+    else
+      tooltip:text(string.format("%s (%s)\n%s", buff_name, spell_name, readable_time))
+    end
   end
 end
 
 -- Updates buffs as needed, and returns true if the list has changed in dimensions
 function buffs:update_buffs(buffs)
   local changed = false
+  local near_expiration_threshold = 15 -- seconds
+  local blink_interval = 0.5           -- seconds for each blink animation phase
+  local blink_phase = math.floor((os.clock() / blink_interval) % 2)
 
   -- Dimensions for wrapping
   local max_width = self._width
@@ -144,14 +162,14 @@ function buffs:update_buffs(buffs)
   local rows = 0                                                         -- Track row count dynamically
 
   -- Remove buffs that are no longer active first
-  for buff_id, buff_data in pairs(self._buffs) do
-    if not (buffs and buffs[buff_id]) then
+  for buff_key, buff_data in pairs(self._buffs) do
+    if not (buffs and buffs[buff_key]) then
       -- Buff no longer exists, remove it
       if buff_data.image then
         buff_data.image:hide()
         buff_data.image:destroy()
       end
-      self._buffs[buff_id] = nil
+      self._buffs[buff_key] = nil
       changed = true
     end
   end
@@ -159,7 +177,7 @@ function buffs:update_buffs(buffs)
   -- Process incoming buffs and update positions
   if buffs then
     local i = 0
-    for buff_id, buff in pairs(buffs) do
+    for buff_key, buff in pairs(buffs) do
       i = i + 1
 
       local new_x, new_y, updated_rows = calculate_buff_position(i, cols, self._buff_width, self._buff_height,
@@ -171,7 +189,7 @@ function buffs:update_buffs(buffs)
         rows = updated_rows
       end
 
-      if not self._buffs[buff_id] then
+      if not self._buffs[buff_key] then
         -- Add new buff
         local new_buff_img = images.new({
           flags = {
@@ -180,38 +198,61 @@ function buffs:update_buffs(buffs)
         })
 
         new_buff_img:size(self._buff_width, self._buff_height)
-        new_buff_img:path(windower.addon_path .. 'icons/' .. buff_id .. '.bmp')
+        new_buff_img:path(windower.addon_path .. 'icons/' .. buff.buff_id .. '.bmp')
         new_buff_img:fit(false)
         new_buff_img:repeat_xy(1, 1)
         new_buff_img:pos(new_x, new_y)
         new_buff_img:draggable(false)
-        new_buff_img:show()
 
-        self._buffs[buff_id] = {
+        if self._isVisible then
+          new_buff_img:show()
+        else
+          new_buff_img:hide()
+        end
+
+        self._buffs[buff_key] = {
           image = new_buff_img,
-          remaining_time = buff.remaining_time,
-          originating_spell = res.spells[buff.originating_spell_id].en,
-          buff_name = res.buffs[buff_id].en,
+          remaining_time = buff.end_time - os.clock(),
+          originating_spell = buff.originating_spell,
+          buff_name = res.buffs[buff.buff_id].en,
           current_x = new_x, -- Track initial position to optimize when pos gets updated
           current_y = new_y  -- Track initial position to optimize when pos gets updated
         }
         changed = true
       else
         -- Update existing buff
-        self._buffs[buff_id].remaining_time = buff.remaining_time
+        self._buffs[buff_key].remaining_time = buff.end_time - os.clock()
+
+        -- the originating spell can change for certain skills
+        if self._buffs[buff_key].originating_spell ~= buff.originating_spell then
+          self._buffs[buff_key].originating_spell = buff.originating_spell
+        end
+
+        -- Check if the buff is near expiration
+        if buff.end_time - os.clock() <= near_expiration_threshold then
+          -- Blink effect: alternate opacity or color
+          if blink_phase == 0 then
+            self._buffs[buff_key].image:alpha(255) -- Fully visible
+          else
+            self._buffs[buff_key].image:alpha(128) -- Semi-transparent
+          end
+        else
+          -- Reset to fully visible if not near expiration
+          self._buffs[buff_key].image:alpha(255)
+        end
 
         -- Only update the position if it is actually changing
-        if self._buffs[buff_id].current_x ~= new_x or self._buffs[buff_id].current_y ~= new_y then
-          self._buffs[buff_id].image:pos(new_x, new_y) -- Update position
-          self._buffs[buff_id].current_x = new_x       -- Store new position
-          self._buffs[buff_id].current_y = new_y
+        if self._buffs[buff_key].current_x ~= new_x or self._buffs[buff_key].current_y ~= new_y then
+          self._buffs[buff_key].image:pos(new_x, new_y) -- Update position
+          self._buffs[buff_key].current_x = new_x       -- Store new position
+          self._buffs[buff_key].current_y = new_y
         end
       end
     end
   end
 
   -- Update tooltip
-  update_tooltip(self._tooltip, self._hovering_on_buff)
+  update_tooltip(buff_tooltip, self._hovering_on_buff)
 
   -- Return true if dimensions changed
   return changed
@@ -230,7 +271,6 @@ function buffs:show()
       end
     end
   end
-  --if not self._disable_tooltips then self._buffs_text:show() end
 end
 
 function buffs:hide()
@@ -242,23 +282,31 @@ function buffs:hide()
       end
     end
   end
-  --if not self._disable_tooltips then self._buffs_text:hide() end
+  if buff_tooltip then
+    buff_tooltip:hide()
+  end
 end
 
 function buffs:handle_mouse(type, cursor_x, cursor_y)
-  if type == 0 then
-    -- Detect hover for tooltip
-    for buff_id, buff in pairs(self._buffs) do
-      if cursor_x >= buff.image:pos_x() and cursor_x <= buff.image:pos_x() + self._buff_width and
-          cursor_y >= buff.image:pos_y() and cursor_y <= buff.image:pos_y() + self._buff_height then
-        self._hovering_on_buff = buff
-        self._hovering_on_buff.id = buff_id
-        self._tooltip:pos(cursor_x + 10, cursor_y + 10) -- Offset the tooltip slightly from the cursor
-        self._tooltip:show()
-        return true
-      else
-        self._hovering_on_buff = {}
-        self._tooltip:hide()
+  if self._isVisible then
+    if type == 0 then
+      -- Detect hover for tooltip
+      for buff_id, buff in pairs(self._buffs) do
+        if cursor_x >= buff.image:pos_x() and cursor_x <= buff.image:pos_x() + self._buff_width and
+            cursor_y >= buff.image:pos_y() and cursor_y <= buff.image:pos_y() + self._buff_height then
+          self._hovering_on_buff = buff
+          self._hovering_on_buff.id = buff_id
+          if buff_tooltip then
+            buff_tooltip:pos(cursor_x + 18, cursor_y + 2) -- Offset the tooltip slightly from the cursor
+            buff_tooltip:show()
+          end
+          return true
+        else
+          self._hovering_on_buff = {}
+          if buff_tooltip then
+            buff_tooltip:hide()
+          end
+        end
       end
     end
   end

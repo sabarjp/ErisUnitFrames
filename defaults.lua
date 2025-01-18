@@ -56,6 +56,10 @@ defaults.player = {
     background = {
       disabled = false,
     },
+  },
+  buffs = {
+    disabled = false,
+    tooltip_disabled = false
   }
 }
 
@@ -112,6 +116,10 @@ defaults.pet = {
     background = {
       disabled = false,
     },
+  },
+  buffs = {
+    disabled = false,
+    tooltip_disabled = false
   }
 }
 
@@ -252,6 +260,10 @@ defaults.party = {
     background = {
       disabled = false,
     },
+  },
+  buffs = {
+    disabled = false,
+    tooltip_disabled = false
   }
 }
 

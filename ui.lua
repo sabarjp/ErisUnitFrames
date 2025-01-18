@@ -139,7 +139,7 @@ function ui:merge_configs(t1, t2)
 end
 
 function ui:initialize(settings, theme)
-  print('initializing UI')
+  --print('initializing UI')
   self.settings = settings
   self.theme = theme
   self.config = ui:merge_configs(self.theme, self.settings)
@@ -245,6 +245,7 @@ function ui:create()
   self:create_battle_target()
   self:create_party()
   self:create_alliance()
+  buffs:create_global_tooltip()
 
   self.isCreated = true
 end
@@ -841,10 +842,12 @@ function ui:hide()
   self.player.health_bar:hide()
   self.player.magic_bar:hide()
   self.player.tp_bar:hide()
+  self.player.buffs:hide()
 
   self.target.text:hide()
   self.target.health_bar:hide()
   self.target.locked_text:hide()
+  self.target.buffs:hide()
 
   self.sub_target.text:hide()
   self.sub_target.health_bar:hide()
@@ -853,6 +856,7 @@ function ui:hide()
   self.pet.health_bar:hide()
   self.pet.magic_bar:hide()
   self.pet.tp_bar:hide()
+  self.pet.buffs:hide()
 
   self.battle_target.text:hide()
 
@@ -862,6 +866,7 @@ function ui:hide()
     self.party[key].health_bar:hide()
     self.party[key].magic_bar:hide()
     self.party[key].tp_bar:hide()
+    self.party[key].buffs:hide()
   end
 
   for _, i in ipairs(alliance_range) do
@@ -1072,6 +1077,7 @@ function ui:update_player()
   set_visibility(self.player.health_bar, self.config.player.health_bar.disabled)
   set_visibility(self.player.magic_bar, self.config.player.magic_bar.disabled)
   set_visibility(self.player.tp_bar, self.config.player.tp_bar.disabled)
+  set_visibility(self.player.buffs, self.config.player.buffs.disabled)
 
   if size_state_changed then
     self.player.click_group:calculate_bounding_box(0.1)
@@ -1242,6 +1248,7 @@ function ui:update_pet()
   set_visibility(self.pet.health_bar, self.config.pet.health_bar.disabled)
   set_visibility(self.pet.magic_bar, self.config.pet.magic_bar.disabled or self.pet.tp_bar.missing_bar_data)
   set_visibility(self.pet.tp_bar, self.config.pet.tp_bar.disabled or self.pet.tp_bar.missing_bar_data)
+  set_visibility(self.pet.buffs, self.config.pet.buffs.disabled)
 
   if size_state_changed then
     self.pet.click_group:calculate_bounding_box(0.1)
@@ -1607,6 +1614,7 @@ function ui:update_party()
     set_visibility(key, element.health_bar, self.config.party.health_bar.disabled or element.missing_bar_data)
     set_visibility(key, element.magic_bar, self.config.party.magic_bar.disabled or element.missing_bar_data)
     set_visibility(key, element.tp_bar, self.config.party.tp_bar.disabled or element.missing_bar_data)
+    set_visibility(key, element.buffs, self.config.party.buffs.disabled or element.missing_bar_data)
 
     if size_state_changed[key] then
       element.click_group:calculate_bounding_box(0.1)

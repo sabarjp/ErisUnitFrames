@@ -41,6 +41,7 @@ defaults = require('defaults')
 bar = require('bar')
 buffs = require('buffs')
 ui = require('ui')
+ja_overwrites = require('ja_overwrites')
 status_effects = require('status_effects')
 
 local isLoaded = false

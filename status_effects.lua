@@ -219,6 +219,13 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       self.buffs[target_id][buff_id] = {}
     end
 
+    -- first, delete any explicit overwrites
+    if spell.overwrites then
+      for _, overwritten_id in pairs(spell.overwrites) do
+        self:remove_buff_given_by_id(target_id, overwritten_id)
+      end
+    end
+
     -- Bard songs work with the following logic
     --   1. max songs/rolls combined on a target is 12.
     --   2. max songs on a target from a specific player is either 2 for a main job bard with an instrument equipped, or 1 for eitehr a sub job bard or a main job bard with no instrument.
@@ -324,6 +331,14 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
     end
     if not self.buffs[target_id][buff_id] then
       self.buffs[target_id][buff_id] = {}
+    end
+
+    -- first, delete any explicit overwrites
+    local overwrites = ja_overwrites[ability_id]
+    if overwrites then
+      for _, overwritten_id in pairs(overwrites) do
+        self:remove_buff_given_by_id(target_id, overwritten_id)
+      end
     end
 
     -- Corsair rolls logic

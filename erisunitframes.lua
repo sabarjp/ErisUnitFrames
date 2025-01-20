@@ -179,8 +179,8 @@ windower.register_event('addon command', function(command, ...)
         ui:destroy()
 
         local settings = config.load(defaults)
-
         ui:initialize(settings, theme)
+        ui.settings.theme = theme_name
         windower.add_to_chat(8, '---------------------------------------------')
         windower.add_to_chat(8, 'Loaded theme: ' .. theme_name .. '.')
         windower.add_to_chat(8, 'You must save to keep these changes.')

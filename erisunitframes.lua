@@ -42,6 +42,8 @@ bar = require('bar')
 buffs = require('buffs')
 ui = require('ui')
 ja_overwrites = require('ja_overwrites')
+stackable_spells = require('stackable_spells')
+blocking_spells = require('blocking_spells')
 status_effects = require('status_effects')
 
 local isLoaded = false

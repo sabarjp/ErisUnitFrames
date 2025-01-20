@@ -163,49 +163,68 @@ function status_effects:handle_action_message(data)
   end
 end
 
--- function status_effects:add_buff_ma(target_id, spell_id, buff_id, type)
---   local spell = res.spells[spell_id]
---   if spell and spell.duration then
---     -- first, delete any explicit overwrites
---     if spell.overwrites then
---       for _, overwritten_id in pairs(spell.overwrites) do
---         self:remove_buff_given_by_id(target_id, overwritten_id)
---       end
---     end
-
---     if type == 'BardSong' then
---       -- Bard songs work with the following logic
---       --   1. max songs/rolls combined on a target is 12.
---       --   2. max songs on a target from a specific player is either 2 for a main job bard with an instrument equipped, or 1 for eitehr a sub job bard or a main job bard with no instrument.
---       --   3. max rolls on a target from a specific player is eitehr 2 for a main job corsair or 1 for a sub job corsair.
---       --   4. when a new song is sung and the specific bard has used up its slots, then if the new song is the same as an existing song, just update the existing song duration, but if its a new song, replace the song with the lowest duration.
---       --      however, if a new song is sung and the target has used its 12 combined song/roll slots, the the oldest one is replaced unless a song is being "refreshed" in duration
---     end
-
---     -- prepare for new buff
---     if not self.buffs[target_id] then
---       self.buffs[target_id] = {}
---     end
-
---     -- then create the new buff
---     self.buffs[target_id][buff_id] = {
---       end_time = os.clock() + spell.duration,
---       originating_spell = spell.en,
---       originating_id = spell_id
---     }
---   end
--- end
-
 function status_effects:get_max_songs_for_actor(actor_id)
-  -- need to use data that we know about the actor to set this correctly
-  -- assume 2 for now
-  return 2
+  -- Get player data
+  local player = windower.ffxi.get_player()
+  if not player then
+    return 2
+  end
+
+  -- Check if the player is the specified actor
+  if player.id ~= actor_id then
+    return 2
+  end
+
+  -- Main job BRD adds 2 songs, sub job BRD adds 1
+  local max_songs = 0
+  if player.main_job == "BRD" then
+    max_songs = 2
+  end
+  if player.sub_job == "BRD" then
+    max_songs = 1
+  end
+
+  if windower.ffxi.get_items() ~= nil then
+    if not (windower.ffxi.get_items().equipment.range_bag == 0 and windower.ffxi.get_items().equipment.range == 0) then
+      local ranged_weapon = windower.ffxi.get_items(windower.ffxi.get_items().equipment.range_bag,
+        windower.ffxi.get_items().equipment.range).id
+      if ranged_weapon ~= nil then
+        if ranged_weapon == 18571 or ranged_weapon == 18839 then
+          -- dauradabla maxed
+          max_songs = max_songs + 2
+        elseif ranged_weapon == 18574 or ranged_weapon == 18575 or ranged_weapon == 18576 or ranged_weapon == 21407 then
+          -- dauradabla / terpander
+          max_songs = max_songs + 1
+        end
+      end
+    end
+  end
+
+  return max_songs
 end
 
 function status_effects:get_max_rolls_for_actor(actor_id)
-  -- need to use data that we know about the actor to set this correctly
-  -- assume 2 for now
-  return 2
+  -- Get player data
+  local player = windower.ffxi.get_player()
+  if not player then
+    return 2
+  end
+
+  -- Check if the player is the specified actor
+  if player.id ~= actor_id then
+    return 2
+  end
+
+  -- Main job COR adds 2 rolls, sub job COR adds 1
+  local max_rolls = 0
+  if player.main_job == "COR" then
+    max_rolls = 2
+  end
+  if player.sub_job == "COR" then
+    max_rolls = 1
+  end
+
+  return max_rolls
 end
 
 function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id)
@@ -219,10 +238,39 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       self.buffs[target_id][buff_id] = {}
     end
 
-    -- first, delete any explicit overwrites
+    -- check for blocking buffs, such as bio blocking dia
+    local blocking_buffs = blocking_spells[spell_id]
+    if blocking_buffs then
+      for _, blocking_spell_id in ipairs(blocking_buffs) do
+        for b_id, spell_table in pairs(self.buffs[target_id]) do
+          for s_id, buff in pairs(spell_table) do
+            if s_id == blocking_spell_id then
+              -- Block the application of this spell
+              return
+            end
+          end
+        end
+      end
+    end
+
+    -- next, delete any explicit overwrites, example dia 2 overwrites dia 1
     if spell.overwrites then
       for _, overwritten_id in pairs(spell.overwrites) do
         self:remove_buff_given_by_id(target_id, overwritten_id)
+      end
+    end
+
+    -- handle special "stackable" spells, such as certain bard songs that stack with
+    -- themselves as opposed to overwriting like most spells do
+    local is_stackable = stackable_spells[spell_id]
+    if not is_stackable then
+      for existing_buff_id, spell_table in pairs(self.buffs[target_id]) do
+        if existing_buff_id == buff_id then
+          for existing_spell_id, buff in pairs(spell_table) do
+            -- Remove non-stackable buffs of the same type
+            self:remove_buff_given_by_id(target_id, existing_spell_id)
+          end
+        end
       end
     end
 
@@ -304,8 +352,10 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       end
     end
 
-
     -- Ensure the table structure exists
+    if not self.buffs[target_id] then
+      self.buffs[target_id] = {}
+    end
     if not self.buffs[target_id][buff_id] then
       self.buffs[target_id][buff_id] = {}
     end
@@ -340,6 +390,7 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
         self:remove_buff_given_by_id(target_id, overwritten_id)
       end
     end
+
 
     -- Corsair rolls logic
     if type == 'CorsairRoll' then
@@ -414,7 +465,11 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
       end
     end
 
+
     -- Ensure the table structure exists
+    if not self.buffs[target_id] then
+      self.buffs[target_id] = {}
+    end
     if not self.buffs[target_id][buff_id] then
       self.buffs[target_id][buff_id] = {}
     end
@@ -446,6 +501,7 @@ function status_effects:add_buff_pup(target_id, ability_id, buff_id)
     if not self.buffs[target_id][buff_id][0] then
       self.buffs[target_id][buff_id] = {}
     end
+
     self.buffs[target_id][buff_id] = {
       end_time = os.clock() + 60,
       originating_spell = 'Maneuver',

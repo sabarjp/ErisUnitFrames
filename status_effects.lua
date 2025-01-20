@@ -480,7 +480,7 @@ function status_effects:remove_buff(target_id, buff_id, spell_id)
   end
 
   -- Clean up target entry if it's empty
-  if next(self.buffs[target_id]) == nil then
+  if self.buffs[target_id] and next(self.buffs[target_id]) == nil then
     self.buffs[target_id] = nil
   end
 end
@@ -525,7 +525,7 @@ function status_effects:remove_buff_with_priority(target_id, buff_id, remove_all
   end
 
   -- Clean up target entry if it's empty
-  if next(self.buffs[target_id]) == nil then
+  if self.buffs[target_id] and next(self.buffs[target_id]) == nil then
     self.buffs[target_id] = nil
   end
 end

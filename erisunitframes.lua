@@ -27,7 +27,7 @@
 
 _addon.name = 'ErisUnitFrames'
 _addon.author = 'Sabarjp'
-_addon.version = '1.1'
+_addon.version = '1.2'
 _addon.language = 'english'
 _addon.command = 'euf'
 
@@ -45,6 +45,7 @@ ja_overwrites = require('ja_overwrites')
 stackable_spells = require('stackable_spells')
 blocking_spells = require('blocking_spells')
 status_effects = require('status_effects')
+monster_abilities = require('monster_ability_effects')
 
 local isLoaded = false
 

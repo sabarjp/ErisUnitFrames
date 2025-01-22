@@ -88,7 +88,7 @@ function status_effects:handle_action(data)
       or message_id == 420 -- rolls
       or message_id == 421 -- various ja, i.e. rolls
   then
-    -- ability
+    -- regular job ability
     local ability_id = data.param
     local buff_id = res.job_abilities[ability_id].status or data.targets[1].actions[1].param
     local actor_id = data.actor_id
@@ -101,15 +101,67 @@ function status_effects:handle_action(data)
         self:add_buff_ja(target_id, ability_id, buff_id, type, actor_id)
       end
     end
+  elseif message_id == 185 -- use weaponskill, target damange
+      or message_id == 186 -- use weaponskill, target status
+      or message_id == 194 -- use weaponskill, target status
+  then
+    -- either a weapon skill or a monster skill
+    local actor_id = data.actor_id
+    if actor_id then
+      local mob_info = windower.ffxi.get_mob_by_id(actor_id)
+
+      if mob_info and mob_info.is_npc and mob_info.spawn_type ~= 2 and mob_info.spawn_type ~= 34 then
+        -- its almost certainly a monster
+        local ability_id = data.param
+        local buff_id_lookup = monster_abilities[ability_id] and monster_abilities[ability_id].status
+        local buff_id_parsed = data.targets[1].actions[1].param
+        local type = 'MonsterWs'
+
+        --print(tostring(type) .. tostring(ability_id) .. '-- ' .. tostring(buff_id) .. ' -> ' .. tostring(#data.targets))
+
+        if buff_id_parsed then
+          for _, target in pairs(data.targets) do
+            local target_id = target.id
+            print('monster explicit gain via action ' .. ability_id .. '-- ' .. buff_id_parsed .. ' -> ' .. target_id)
+            --self:add_buff_mon(target_id, ability_id, buff_id_parsed, type, actor_id)
+          end
+        end
+
+        if buff_id_lookup then
+          for single_buff_id, single_buff in ipairs(buff_id_lookup) do
+            for _, target in pairs(data.targets) do
+              local target_id = target.id
+              print('monster gain via lookup action ' .. ability_id .. '-- ' .. single_buff_id .. ' -> ' .. target_id)
+              -- self:add_buff_mon(target_id, ability_id, single_buff_id, type, actor_id)
+            end
+          end
+        end
+      else
+        -- not a monster
+        -- local ability_id = data.param
+        -- local buff_id = res.job_abilities[ability_id].status or data.targets[1].actions[1].param
+        -- local type = res.job_abilities[ability_id].type
+
+        -- if buff_id then
+        --   for _, target in pairs(data.targets) do
+        --     local target_id = target.id
+        --     --print('not-monster, gain via action ' .. ability_id .. '-- ' .. buff_id .. ' -> ' .. target_id)
+        --     self:add_buff_ja(target_id, ability_id, buff_id, type, actor_id)
+        --   end
+        -- end
+      end
+    end
   elseif message_id == 426 then
-    -- busted on roll
+    -- corsair busted on roll
     local ability_id = data.param
     local buff_id = res.job_abilities[ability_id].status or data.targets[1].actions[1].param
 
-    for _, target in pairs(data.targets) do
-      local target_id = target.id
-      --print('lost via action -- ' .. buff_id .. ' -> ' .. target_id)
-      self:remove_buff_with_priority(target_id, buff_id, true)
+    if buff_id then
+      for _, target in pairs(data.targets) do
+        local target_id = target.id
+        --print('lost via action -- ' .. buff_id .. ' -> ' .. target_id)
+        self:remove_buff_with_priority(target_id, buff_id, true)
+      end
     end
   elseif message_id == 799 then
     -- puppet overloaded
@@ -118,11 +170,16 @@ function status_effects:handle_action(data)
       self:add_buff_pup(target_id, nil, 299)
     end
   else
-    --print('did not ha capture ' .. message_id)
+    -- local actor_id = data.actor_id
+    -- local spell_id = data.param
+    -- local target = windower.ffxi.get_mob_by_target('t')
+    -- if (target.id == actor_id) then
+    --   --print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
+    -- end
   end
 end
 
--- unhandled actions for now
+-- unhandled actions... for now
 -- 570-572, 757, 792: multi-erase
 -- 319-320, 414, 441, 602: target gain status from ja
 -- 321-322: target lose status from ja
@@ -159,7 +216,10 @@ function status_effects:handle_action_message(data)
   then
     self:remove_buff_with_priority(data.target_id, data.buff_id)
   else
-    --print('did not ham capture ' .. data.message_id)
+    -- local target = windower.ffxi.get_mob_by_target('t')
+    -- if (target.id == data.target_id) then
+    --   --print('did not ham capture ' .. data.target_id .. ' -> ' .. data.message_id)
+    -- end
   end
 end
 
@@ -366,6 +426,37 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       end_time = os.clock() + spell.duration,
       originating_spell = spell.en,
       originating_id = spell_id,
+      actor_id = actor_id,
+      type = type
+    }
+  end
+end
+
+function status_effects:add_buff_mon(target_id, ability_id, buff_id, type, actor_id)
+  local ability = monster_abilities[ability_id]
+  if ability and ability.duration then
+    -- Prepare data structures
+    if not self.buffs[target_id] then
+      self.buffs[target_id] = {}
+    end
+    if not self.buffs[target_id][buff_id] then
+      self.buffs[target_id][buff_id] = {}
+    end
+
+    -- Ensure the table structure exists
+    if not self.buffs[target_id] then
+      self.buffs[target_id] = {}
+    end
+    if not self.buffs[target_id][buff_id] then
+      self.buffs[target_id][buff_id] = {}
+    end
+
+    -- Add the new buff
+    self.buffs[target_id][buff_id][ability_id] = {
+      buff_id = buff_id,
+      end_time = os.clock() + ability.duration,
+      originating_spell = ability.en,
+      originating_id = ability_id,
       actor_id = actor_id,
       type = type
     }

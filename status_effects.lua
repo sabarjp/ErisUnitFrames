@@ -36,146 +36,188 @@ function status_effects:update()
 end
 
 function status_effects:handle_action(data)
-  local message_id = data.targets[1].actions[1].message
+  -- local message_id = data.targets[1].actions[1].message
 
-  --print(data.category .. ' . ' .. data.param)
-  --print('action=' .. message_id)
+  local actor_id = data.actor_id
 
-  if message_id == 2       -- cast and deal damage
-      or message_id == 252 -- cast and magic burst
-      or message_id == 230 -- cast and gain status defensive
-      or message_id == 236 -- cast and gain status offensive
-      or message_id == 237 -- cast and gain status generic
-      or message_id == 268 -- cast and magic burst plus status
-      or message_id == 271 -- cast and magic burst plus status
-  then
-    -- magic spell
-    local spell_id = data.param
-    local buff_id = res.spells[spell_id].status or data.targets[1].actions[1].param
-    local actor_id = data.actor_id
-    local type = res.spells[spell_id].type
+  if data.targets then
+    local source = 'UNKNOWN' -- UNKNOWN, MAGIC, ABILITY, WEASPONSKILL
 
-    if buff_id then
-      for _, target in pairs(data.targets) do
-        local target_id = target.id
-        --print('gain via action -- ' .. target_id .. ' <- ' .. buff_id .. ' from ' .. spell_id)
-        self:add_buff_ma(target_id, spell_id, buff_id, type, actor_id)
-      end
-    end
-  elseif message_id == 100 -- use ability, no target
-      or message_id == 115 -- use ability, enhance self
-      or message_id == 116 -- use ability, enhance self
-      or message_id == 117 -- use ability, enhance self
-      or message_id == 118 -- use ability, enhance self
-      or message_id == 119 -- use ability, on target
-      or message_id == 120 -- use ability, enhance self
-      or message_id == 121 -- use ability, enhance self
-      or message_id == 126 -- use ability, enhance self
-      or message_id == 127 -- use ability, status target
-      or message_id == 131 -- use ability, defend against mob type
-      or message_id == 134 -- use ability, defend against mob type
-      or message_id == 141 -- use ability, status target
-      or message_id == 143 -- use ability, enhance self
-      or message_id == 144 -- use ability, debuff target
-      or message_id == 146 -- use ability, debuff target
-      or message_id == 148 -- use ability, defend against mob type
-      or message_id == 149 -- use ability, defend against mob type
-      or message_id == 150 -- use ability, defend against mob type
-      or message_id == 151 -- use ability, defend against mob type
-      or message_id == 303 -- divine seal
-      or message_id == 304 -- ele seal
-      or message_id == 305 -- trick attack
-      or message_id == 420 -- rolls
-      or message_id == 421 -- various ja, i.e. rolls
-  then
-    -- regular job ability
-    local ability_id = data.param
-    local buff_id = res.job_abilities[ability_id].status or data.targets[1].actions[1].param
-    local actor_id = data.actor_id
-    local type = res.job_abilities[ability_id].type
+    for _, target in pairs(data.targets) do
+      if target.actions then
+        for _, action in pairs(target.actions) do
+          local message_id = action.message
 
-    if buff_id then
-      for _, target in pairs(data.targets) do
-        local target_id = target.id
-        --print('gain via action -- ' .. buff_id .. ' -> ' .. target_id)
-        self:add_buff_ja(target_id, ability_id, buff_id, type, actor_id)
-      end
-    end
-  elseif message_id == 185 -- use weaponskill, target damange
-      or message_id == 186 -- use weaponskill, target status
-      or message_id == 194 -- use weaponskill, target status
-  then
-    -- either a weapon skill or a monster skill
-    local actor_id = data.actor_id
-    if actor_id then
-      local mob_info = windower.ffxi.get_mob_by_id(actor_id)
+          --------------------------------------------------------------------------------
+          -- MAGIC SPELL
+          --------------------------------------------------------------------------------
+          if message_id == 2       -- cast and deal damage
+              or message_id == 252 -- cast and magic burst
+              or message_id == 230 -- cast and gain status defensive
+              or message_id == 236 -- cast and gain status offensive
+              or message_id == 237 -- cast and gain status generic
+              or message_id == 268 -- cast and magic burst plus status
+              or message_id == 271 -- cast and magic burst plus status_effects
+          then
+            source = 'MAGIC'
+            local spell_id = data.param -- data.param will capture ${spell} in original message
+            local buff_id = res.spells[spell_id].status or action.param
+            local type = res.spells[spell_id].type
 
-      if mob_info and mob_info.is_npc and mob_info.spawn_type ~= 2 and mob_info.spawn_type ~= 34 then
-        -- its almost certainly a monster
-        local ability_id = data.param
-        local buff_id_lookup = monster_abilities[ability_id] and monster_abilities[ability_id].status
-        local buff_id_parsed = data.targets[1].actions[1].param
-        local type = 'MonsterWs'
+            if buff_id then
+              --print('gain via action -- ' .. target_id .. ' <- ' .. buff_id .. ' from ' .. spell_id)
+              self:add_buff(target.id, source, spell_id, buff_id, type, actor_id)
+            end
 
-        --print(tostring(type) .. tostring(ability_id) .. '-- ' .. tostring(buff_id) .. ' -> ' .. tostring(#data.targets))
+            --------------------------------------------------------------------------------
+            -- JOB ABILITY
+            --------------------------------------------------------------------------------
+          elseif message_id == 100 -- use ability, no target
+              or message_id == 115 -- use ability, enhance self
+              or message_id == 116 -- use ability, enhance self
+              or message_id == 117 -- use ability, enhance self
+              or message_id == 118 -- use ability, enhance self
+              or message_id == 119 -- use ability, on target
+              or message_id == 120 -- use ability, enhance self
+              or message_id == 121 -- use ability, enhance self
+              or message_id == 126 -- use ability, enhance self
+              or message_id == 127 -- use ability, status target
+              or message_id == 131 -- use ability, defend against mob type
+              or message_id == 134 -- use ability, defend against mob type
+              or message_id == 141 -- use ability, status target
+              or message_id == 143 -- use ability, enhance self
+              or message_id == 144 -- use ability, debuff target
+              or message_id == 146 -- use ability, debuff target
+              or message_id == 148 -- use ability, defend against mob type
+              or message_id == 149 -- use ability, defend against mob type
+              or message_id == 150 -- use ability, defend against mob type
+              or message_id == 151 -- use ability, defend against mob type
+              or message_id == 303 -- divine seal
+              or message_id == 304 -- ele seal
+              or message_id == 305 -- trick attack
+              or message_id == 420 -- rolls
+              or message_id == 421 -- various ja, i.e. rolls
+          then
+            source = 'ABILITY'
+            local ability_id = data.param -- data.param will capture ${ability} in original message
+            local buff_id = res.job_abilities[ability_id].status or action.param
+            local type = res.job_abilities[ability_id].type
 
-        if buff_id_parsed then
-          for _, target in pairs(data.targets) do
-            local target_id = target.id
-            print('monster explicit gain via action ' .. ability_id .. '-- ' .. buff_id_parsed .. ' -> ' .. target_id)
-            --self:add_buff_mon(target_id, ability_id, buff_id_parsed, type, actor_id)
-          end
-        end
+            if buff_id then
+              --print('gain via action -- ' .. buff_id .. ' -> ' .. target_id)
+              self:add_buff(target.id, source, ability_id, buff_id, type, actor_id)
+            end
 
-        if buff_id_lookup then
-          for single_buff_id, single_buff in ipairs(buff_id_lookup) do
-            for _, target in pairs(data.targets) do
+            --------------------------------------------------------------------------------
+            -- WEAPON SKILL / MOB ABILITY
+            --------------------------------------------------------------------------------
+          elseif message_id == 185 -- use weaponskill, target damange
+              or message_id == 186 -- use weaponskill, target status
+              or message_id == 194 -- use weaponskill, target status
+              or message_id == 242 -- use weaponskill, target status
+              or message_id == 243 -- use weaponskill, target status
+          then
+            source = 'WEAPONSKILL'
+            local ability_id = data.param -- data.param will capture ${weaponskill} in original message
+            local buff_id_lookup = monster_abilities[ability_id] and monster_abilities[ability_id].status
+            local type = 'Weaponskill'
+
+            if ability_id < 256 then
+              local ws = res.weapon_skills[ability_id]
+              print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
+            else
+              local ws = res.monster_abilities[ability_id]
+              print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
+            end
+
+            if message_id == 185 then
+              -- It is a damage event, so we have to perform a lookup for its status.
+              if buff_id_lookup then
+                for _, single_buff_id in pairs(buff_id_lookup) do
+                  local target_id = target.id
+                  --print('ws gain via lookup action ' ..
+                  --  message_id .. ': ' .. ability_id .. '-- ' .. single_buff_id .. ' -> ' .. target_id)
+                  self:add_buff(target_id, source, ability_id, single_buff_id, type, actor_id)
+                end
+              end
+            else
+              -- It is not a damage event, so the buff should come across in the chat message.
+              local buff_id_parsed = action.param
               local target_id = target.id
-              print('monster gain via lookup action ' .. ability_id .. '-- ' .. single_buff_id .. ' -> ' .. target_id)
-              -- self:add_buff_mon(target_id, ability_id, single_buff_id, type, actor_id)
+              if buff_id_parsed and buff_id_parsed ~= 0 then
+                --print('ws explicit gain via action ' ..
+                --  message_id .. ': ' .. ability_id .. '-- ' .. buff_id_parsed .. ' -> ' .. target_id)
+                self:add_buff(target_id, source, ability_id, buff_id_parsed, type, actor_id)
+              end
+            end
+
+            --------------------------------------------------------------------------------
+            -- CORSAIR ROLL BUST
+            --------------------------------------------------------------------------------
+          elseif message_id == 426 then
+            local ability_id = data.param
+            local buff_id = res.job_abilities[ability_id].status or action.param
+
+            if buff_id then
+              local target_id = target.id
+              --print('lost via action -- ' .. buff_id .. ' -> ' .. target_id)
+              self:remove_buff_with_priority(target_id, buff_id, true)
+            end
+
+            --------------------------------------------------------------------------------
+            -- PUPPET OVERLOAD
+            --------------------------------------------------------------------------------
+          elseif message_id == 799 then
+            self:add_buff_pup(target.id, nil, 299)
+
+            --------------------------------------------------------------------------------
+            -- ERASE
+            --------------------------------------------------------------------------------
+          elseif message_id == 341
+              or message_id == 342 then
+            local ability_id = data.param
+            local buff_id = res.job_abilities[ability_id].status or action.param
+
+            if buff_id then
+              self:remove_buff_with_priority(target.id, buff_id)
+            end
+
+            --------------------------------------------------------------------------------
+            -- GAIN STATUS, NO EXPLICIT SOURCE
+            --------------------------------------------------------------------------------
+          elseif message_id == 266       -- gain effect
+              or message_id == 267       -- gain effect
+              or message_id == 277       -- gain effect
+              or message_id == 278       -- gain effect
+              or message_id == 279       -- gain effect
+          then
+            local source_id = data.param -- data.param will capture the source id in original message
+            local buff_id = action.param
+
+            local type = ''
+            if source == 'MAGIC' then
+              type = res.spells[source_id].type
+            elseif source == 'ABILITY' then
+              type = res.job_abilities[source_id].type
+            end
+
+            if buff_id then
+              --print('gain via action -- ' .. buff_id .. ' -> ' .. target_id)
+              self:add_buff(target.id, source, source_id, buff_id, type, actor_id)
+            end
+
+            --------------------------------------------------------------------------------
+            -- NOT FOUND
+            --------------------------------------------------------------------------------
+          else
+            local spell_id = data.param
+            if spell_id > 245 and spell_id < 4500 then
+              --print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
             end
           end
         end
-      else
-        -- not a monster
-        -- local ability_id = data.param
-        -- local buff_id = res.job_abilities[ability_id].status or data.targets[1].actions[1].param
-        -- local type = res.job_abilities[ability_id].type
-
-        -- if buff_id then
-        --   for _, target in pairs(data.targets) do
-        --     local target_id = target.id
-        --     --print('not-monster, gain via action ' .. ability_id .. '-- ' .. buff_id .. ' -> ' .. target_id)
-        --     self:add_buff_ja(target_id, ability_id, buff_id, type, actor_id)
-        --   end
-        -- end
       end
     end
-  elseif message_id == 426 then
-    -- corsair busted on roll
-    local ability_id = data.param
-    local buff_id = res.job_abilities[ability_id].status or data.targets[1].actions[1].param
-
-    if buff_id then
-      for _, target in pairs(data.targets) do
-        local target_id = target.id
-        --print('lost via action -- ' .. buff_id .. ' -> ' .. target_id)
-        self:remove_buff_with_priority(target_id, buff_id, true)
-      end
-    end
-  elseif message_id == 799 then
-    -- puppet overloaded
-    for _, target in pairs(data.targets) do
-      local target_id = target.id
-      self:add_buff_pup(target_id, nil, 299)
-    end
-  else
-    -- local actor_id = data.actor_id
-    -- local spell_id = data.param
-    -- local target = windower.ffxi.get_mob_by_target('t')
-    -- if (target.id == actor_id) then
-    --   --print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
-    -- end
   end
 end
 
@@ -216,6 +258,11 @@ function status_effects:handle_action_message(data)
   then
     self:remove_buff_with_priority(data.target_id, data.buff_id)
   else
+    local buff_id = data.buff_id
+    if buff_id < 5000 then
+      --print('did not ham capture ' .. buff_id .. ' -> ' .. data.message_id)
+    end
+
     -- local target = windower.ffxi.get_mob_by_target('t')
     -- if (target.id == data.target_id) then
     --   --print('did not ham capture ' .. data.target_id .. ' -> ' .. data.message_id)
@@ -285,6 +332,16 @@ function status_effects:get_max_rolls_for_actor(actor_id)
   end
 
   return max_rolls
+end
+
+function status_effects:add_buff(target_id, source_type, source_id, buff_id, type, actor_id)
+  if source_type == 'MAGIC' then
+    self:add_buff_ma(target_id, source_id, buff_id, type, actor_id)
+  elseif source_type == 'ABILITY' then
+    self:add_buff_ja(target_id, source_id, buff_id, type, actor_id)
+  elseif source_type == 'WEAPONSKILL' then
+    self:add_buff_ws(target_id, source_id, buff_id, type, actor_id)
+  end
 end
 
 function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id)
@@ -432,8 +489,15 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
   end
 end
 
-function status_effects:add_buff_mon(target_id, ability_id, buff_id, type, actor_id)
+function status_effects:add_buff_ws(target_id, ability_id, buff_id, type, actor_id)
   local ability = monster_abilities[ability_id]
+  -- if ability then
+  --   local target = windower.ffxi.get_mob_by_id(target_id)
+  --   print(ability.en .. ' -> ' .. res.buffs[buff_id].en .. ' -> ' .. target.name)
+  -- else
+  --   print(ability_id .. ' not in monster_abilities, probably has no effect')
+  -- end
+
   if ability and ability.duration then
     -- Prepare data structures
     if not self.buffs[target_id] then
@@ -745,5 +809,19 @@ windower.register_event('incoming chunk', function(id, data)
     end
   end
 end)
+
+function printTable(tbl, indent)
+  indent = indent or 0
+  local indentString = string.rep("  ", indent)
+
+  for key, value in pairs(tbl) do
+    if type(value) == "table" then
+      windower.add_to_chat(8, indentString .. tostring(key) .. ":")
+      printTable(value, indent + 1)
+    else
+      windower.add_to_chat(8, indentString .. tostring(key) .. ": " .. tostring(value))
+    end
+  end
+end
 
 return status_effects

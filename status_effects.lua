@@ -130,13 +130,13 @@ function status_effects:handle_action(data)
             local buff_id_lookup = monster_abilities[ability_id] and monster_abilities[ability_id].status
             local type = 'Weaponskill'
 
-            if ability_id < 256 then
-              local ws = res.weapon_skills[ability_id]
-              print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
-            else
-              local ws = res.monster_abilities[ability_id]
-              print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
-            end
+            -- if ability_id < 256 then
+            --   local ws = res.weapon_skills[ability_id]
+            --   print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
+            -- else
+            --   local ws = res.monster_abilities[ability_id]
+            --   print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
+            -- end
 
             if message_id == 185 then
               -- It is a damage event, so we have to perform a lookup for its status.
@@ -220,7 +220,7 @@ function status_effects:handle_action(data)
           else
             local spell_id = data.param
             if spell_id > 256 and spell_id < 4500 then
-              print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
+              --print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
             end
           end
         end

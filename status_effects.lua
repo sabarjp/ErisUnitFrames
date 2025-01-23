@@ -61,11 +61,19 @@ function status_effects:handle_action(data)
           then
             source = 'MAGIC'
             local spell_id = data.param -- data.param will capture ${spell} in original message
-            local buff_id = res.spells[spell_id].status or action.param
+            local buff_id = res.spells[spell_id].status
+
+            -- for non-damaging events, we can try to pull the status from the action params
+            if message_id ~= 2 and message_id ~= 252 then
+              if not buff_id then
+                buff_id = action.param
+              end
+            end
+
             local type = res.spells[spell_id].type
 
             if buff_id then
-              --print('gain via action -- ' .. target_id .. ' <- ' .. buff_id .. ' from ' .. spell_id)
+              --print('gain via action -- ' .. target.id .. ' <- ' .. buff_id .. ' from ' .. spell_id)
               self:add_buff(target.id, source, spell_id, buff_id, type, actor_id)
             end
 
@@ -211,8 +219,8 @@ function status_effects:handle_action(data)
             --------------------------------------------------------------------------------
           else
             local spell_id = data.param
-            if spell_id > 245 and spell_id < 4500 then
-              --print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
+            if spell_id > 256 and spell_id < 4500 then
+              print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
             end
           end
         end
@@ -344,9 +352,23 @@ function status_effects:add_buff(target_id, source_type, source_id, buff_id, typ
   end
 end
 
+function status_effects:get_known_duration(spell_id)
+  if spell_id == 112 then
+    return 6
+  elseif spell_id == 136 then
+    return 600
+  elseif spell_id == 137 then
+    return 600
+  elseif spell_id == 138 then
+    return 600
+  end
+end
+
 function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id)
   local spell = res.spells[spell_id]
-  if spell and spell.duration then
+  local duration = spell.duration or self:get_known_duration(spell_id) or 60
+
+  if spell then
     -- Prepare data structures
     if not self.buffs[target_id] then
       self.buffs[target_id] = {}
@@ -423,7 +445,7 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       for _, song in ipairs(bard_songs) do
         if song.buff_id == buff_id and song.spell_id == spell_id then
           -- Refresh the duration
-          self.buffs[target_id][buff_id][spell_id].end_time = os.clock() + spell.duration
+          self.buffs[target_id][buff_id][spell_id].end_time = os.clock() + duration
           return -- Stop here since we just refreshed
         end
       end
@@ -477,14 +499,18 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       self.buffs[target_id][buff_id] = {}
     end
 
+
+
     -- Add the new buff
     self.buffs[target_id][buff_id][spell_id] = {
       buff_id = buff_id,
-      end_time = os.clock() + spell.duration,
+      end_time = os.clock() + duration,
       originating_spell = spell.en,
       originating_id = spell_id,
       actor_id = actor_id,
-      type = type
+      target_id = target_id,
+      type = type,
+      category = buff_types[buff_id] or ""
     }
   end
 end
@@ -522,7 +548,9 @@ function status_effects:add_buff_ws(target_id, ability_id, buff_id, type, actor_
       originating_spell = ability.en,
       originating_id = ability_id,
       actor_id = actor_id,
-      type = type
+      target_id = target_id,
+      type = type,
+      category = buff_types[buff_id] or ""
     }
   end
 end
@@ -636,7 +664,9 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
       originating_spell = ability.en,
       originating_id = ability_id,
       actor_id = actor_id,
-      type = type
+      target_id = target_id,
+      type = type,
+      category = buff_types[buff_id] or ""
     }
   end
 end
@@ -660,7 +690,9 @@ function status_effects:add_buff_pup(target_id, ability_id, buff_id)
     self.buffs[target_id][buff_id] = {
       end_time = os.clock() + 60,
       originating_spell = 'Maneuver',
-      originating_id = ability_id
+      originating_id = ability_id,
+      target_id = target_id,
+      category = buff_types[buff_id] or ""
     }
   end
 end
@@ -774,7 +806,9 @@ function status_effects:get_buffs_for_target(target_id)
         originating_spell = buff.originating_spell,
         originating_id = buff.originating_id,
         actor_id = buff.actor_id,
-        type = buff.type
+        target_id = buff.target_id,
+        type = buff.type,
+        category = buff.category
       }
     end
   end

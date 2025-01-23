@@ -757,7 +757,7 @@ return {
   [1169] = { id = 1169, en = "Poison Breath", status = { 3 }, duration = 90 },                                     -- poison
   [1179] = { id = 1179, en = "Poison Breath", status = { 3 }, duration = 90 },                                     -- poison
   [2229] = { id = 2229, en = "Poison Breath", status = { 3 }, duration = 90 },                                     -- poison
-  [467] = { id = 467, en = "Rot Gas", status = { 8 }, duration = 120 },                                            -- disease
+  [467] = { id = 467, en = "Rot Gas", status = { 8 }, duration = 180 },                                            -- disease
   [469] = { id = 469, en = "Shadow Claw", status = { 5 }, duration = 180 },                                        -- blindness
   -- naraka family
   [2719] = { id = 2719, en = "Raksha: Judgment", status = { 6, 16, 11 }, duration = 60 },                          -- silence, amnesia, bind

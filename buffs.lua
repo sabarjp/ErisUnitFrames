@@ -59,6 +59,9 @@ end
 
 function buffs:destroy()
   for _, buff_data in pairs(self._buffs) do
+    if buff_data.background then
+      buff_data.background:destroy()
+    end
     if buff_data.image then
       buff_data.image:destroy()
     end
@@ -125,6 +128,7 @@ local function update_tooltip(tooltip, hovering_buff)
 
   local buff_name = hovering_buff.buff_name or 'Unknown'
   local spell_name = hovering_buff.originating_spell or 'Unknown'
+  local category = hovering_buff.buff_category
 
   -- Convert remaining time to a readable format
   local readable_time
@@ -165,6 +169,10 @@ function buffs:update_buffs(buffs)
   for buff_key, buff_data in pairs(self._buffs) do
     if not (buffs and buffs[buff_key]) then
       -- Buff no longer exists, remove it
+      if buff_data.background then
+        buff_data.background:hide()
+        buff_data.background:destroy()
+      end
       if buff_data.image then
         buff_data.image:hide()
         buff_data.image:destroy()
@@ -190,7 +198,71 @@ function buffs:update_buffs(buffs)
       end
 
       if not self._buffs[buff_key] then
-        -- Add new buff
+        -- if an ability is a certain category, we give it a background to make it
+        -- stand out more for curing it.
+
+        local target_data = windower.ffxi.get_mob_by_id(buff.target_id)
+        local is_friendly = target_data.in_party or target_data.in_alliance or (not target_data.is_npc)
+        local new_buff_bg = nil
+        local is_creating_background = false
+        local bg_color = { 0, 0, 0 }
+
+        if is_friendly then
+          if buff.category == "sleep" then
+            is_creating_background = true
+            bg_color = { 0, 0, 0 }
+          elseif buff.category == "poison" then
+            is_creating_background = true
+            bg_color = { 26, 209, 3 }
+          elseif buff.category == "paralyze" then
+            is_creating_background = true
+            bg_color = { 255, 216, 0 }
+          elseif buff.category == "blind" then
+            is_creating_background = true
+            bg_color = { 128, 128, 128 }
+          elseif buff.category == "silence" then
+            is_creating_background = true
+            bg_color = { 102, 255, 183 }
+          elseif buff.category == "petrify" then
+            is_creating_background = true
+            bg_color = { 112, 78, 0 }
+          elseif buff.category == "disease" then
+            is_creating_background = true
+            bg_color = { 187, 131, 226 }
+          elseif buff.category == "curse" then
+            is_creating_background = true
+            bg_color = { 83, 0, 226 }
+          elseif buff.category == "uncurable" then
+            is_creating_background = true
+            bg_color = { 228, 0, 0 }
+          elseif buff.category == "erase" then
+            is_creating_background = true
+            bg_color = { 0, 182, 255 }
+          end
+        else
+          if buff.category == "dispelable buff" then
+            is_creating_background = true
+            bg_color = { 226, 62, 189 }
+          end
+        end
+
+        if is_creating_background then
+          new_buff_bg = images.new({
+            flags = {
+              draggable = false
+            }
+          })
+
+          new_buff_bg:size(self._buff_width, self._buff_height)
+          new_buff_bg:path(windower.addon_path .. 'icons/bg.bmp')
+          new_buff_bg:fit(false)
+          new_buff_bg:repeat_xy(1, 1)
+          new_buff_bg:pos(new_x, new_y)
+          new_buff_bg:draggable(false)
+          new_buff_bg:alpha(255)
+          new_buff_bg:color(unpack(bg_color))
+        end
+
         local new_buff_img = images.new({
           flags = {
             draggable = false
@@ -203,18 +275,28 @@ function buffs:update_buffs(buffs)
         new_buff_img:repeat_xy(1, 1)
         new_buff_img:pos(new_x, new_y)
         new_buff_img:draggable(false)
+        new_buff_img:alpha(255)
+
 
         if self._isVisible then
+          if new_buff_bg then
+            new_buff_bg:show()
+          end
           new_buff_img:show()
         else
+          if new_buff_bg then
+            new_buff_bg:hide()
+          end
           new_buff_img:hide()
         end
 
         self._buffs[buff_key] = {
+          background = new_buff_bg,
           image = new_buff_img,
           remaining_time = buff.end_time - os.clock(),
           originating_spell = buff.originating_spell,
           buff_name = res.buffs[buff.buff_id].en,
+          buff_category = buff.category,
           current_x = new_x, -- Track initial position to optimize when pos gets updated
           current_y = new_y  -- Track initial position to optimize when pos gets updated
         }
@@ -243,8 +325,11 @@ function buffs:update_buffs(buffs)
 
         -- Only update the position if it is actually changing
         if self._buffs[buff_key].current_x ~= new_x or self._buffs[buff_key].current_y ~= new_y then
-          self._buffs[buff_key].image:pos(new_x, new_y) -- Update position
-          self._buffs[buff_key].current_x = new_x       -- Store new position
+          if self._buffs[buff_key].background then
+            self._buffs[buff_key].background:pos(new_x, new_y) -- Update position
+          end
+          self._buffs[buff_key].image:pos(new_x, new_y)        -- Update position
+          self._buffs[buff_key].current_x = new_x              -- Store new position
           self._buffs[buff_key].current_y = new_y
         end
       end
@@ -266,6 +351,9 @@ function buffs:show()
   self._isVisible = true
   if self._buffs then
     for _, buff in pairs(self._buffs) do
+      if buff.background then
+        buff.background:show()
+      end
       if buff.image then
         buff.image:show()
       end
@@ -277,6 +365,9 @@ function buffs:hide()
   self._isVisible = false
   if self._buffs then
     for _, buff in pairs(self._buffs) do
+      if buff.background then
+        buff.background:hide()
+      end
       if buff.image then
         buff.image:hide()
       end

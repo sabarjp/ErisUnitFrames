@@ -46,6 +46,7 @@ stackable_spells = require('stackable_spells')
 blocking_spells = require('blocking_spells')
 status_effects = require('status_effects')
 monster_abilities = require('monster_ability_effects')
+buff_types = require('buff_types')
 
 local isLoaded = false
 
@@ -92,6 +93,12 @@ end)
 
 windower.register_event('target change', function(index)
   if isLoaded then
+    if index ~= 0 then
+      local mob = windower.ffxi.get_mob_by_index(index)
+      ui:update_current_target(mob.id)
+    else
+      ui:update_current_target(0)
+    end
     ui:update_gui()
   end
 end)

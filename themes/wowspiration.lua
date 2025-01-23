@@ -171,10 +171,10 @@ theme.player = {
     }
   },
   buffs = {
-    height = 24,
+    height = 32,
     width = 120,
-    buff_height = 12,
-    buff_width = 12,
+    buff_height = 16,
+    buff_width = 16,
     rel_pos = {
       x = 0,
       y = 54
@@ -346,10 +346,10 @@ theme.pet = {
     }
   },
   buffs = {
-    height = 24,
+    height = 32,
     width = 100,
-    buff_height = 12,
-    buff_width = 12,
+    buff_height = 16,
+    buff_width = 16,
     rel_pos = {
       x = 0,
       y = 54
@@ -449,10 +449,10 @@ theme.target = {
     }
   },
   buffs = {
-    height = 24,
+    height = 32,
     width = 120,
-    buff_height = 12,
-    buff_width = 12,
+    buff_height = 16,
+    buff_width = 16,
     rel_pos = {
       x = 0,
       y = 36
@@ -720,10 +720,10 @@ theme.party = {
     }
   },
   buffs = {
-    height = 24,
+    height = 32,
     width = 110,
-    buff_height = 12,
-    buff_width = 12,
+    buff_height = 16,
+    buff_width = 16,
     rel_pos = {
       x = 8,
       y = 44

@@ -6,6 +6,15 @@ ui = {
   isVisible = true,
   isCreated = false,
 
+  -- the current target, which helps us highlight UI frames
+  currentTarget = 0,
+
+  -- whether or not we moved the target arrow to something during this render; used to hide arrow
+  didTargetMatch = false,
+
+  targetArrowOffsetX = -34,
+  targetArrowOffsetY = -6,
+
   -- whether drag-n-drop is off or on, locked means cannot move
   isLocked = true,
   -- if a group is being dragged, then this contains metadata on it
@@ -114,6 +123,8 @@ ui = {
     a25 = {}
   },
 
+  target_arrow = {},
+
   action_handlers = {
     on_left_click = {},
     on_right_click = {}
@@ -124,6 +135,7 @@ ui = {
 }
 
 local alliance_range = { 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 24, 25 }
+
 
 function ui:merge_configs(t1, t2)
   for k, v in pairs(t2) do
@@ -218,11 +230,13 @@ function ui:destroy()
     a24 = {},
     a25 = {}
   }
+  self.target_arrow = {}
   self.config = {}
   self.settings = {}
   self.theme = {}
   self.format_string_cache = {}
   self.dragged = {}
+
 
 
   -- Step 4: Destroy drag_groups, which destroys all components
@@ -232,6 +246,8 @@ function ui:destroy()
     end
   end
   self.draggable_groups = {}
+  -- Step 4.5: destroy the target arrow
+  self.target_arrow:destroy()
 
   coroutine.sleep(1.5)
   self.isVisible = true
@@ -245,6 +261,7 @@ function ui:create()
   self:create_battle_target()
   self:create_party()
   self:create_alliance()
+  self:create_target_arrow()
   buffs:create_global_tooltip()
 
   self.isCreated = true
@@ -822,6 +839,25 @@ function ui:create_alliance()
   end
 end
 
+function ui:create_target_arrow()
+  local arrow = images.new({
+    flags = {
+      draggable = false
+    }
+  })
+
+  arrow:size(32, 32)
+  arrow:path(windower.addon_path .. 'icons/arrow.bmp')
+  arrow:fit(false)
+  arrow:repeat_xy(1, 1)
+  arrow:pos(0, 0)
+  arrow:draggable(false)
+  arrow:alpha(255)
+  arrow:hide()
+
+  self.target_arrow = arrow
+end
+
 function ui:register_handler(event, action, group_object, target)
   local actual_action = action:gsub("%%this", target)
   if not self.action_handlers[event] then
@@ -1068,6 +1104,10 @@ function ui:update_player()
   if player ~= nil and not self.config.player.disabled then
     if self.config.player.only_show_in_combat == false or (self.config.player.only_show_in_combat == true and player.in_combat == true) then
       self:update_player_frame(player)
+      if player.id == self.currentTarget then
+        self:move_target_arrow(self.player.text:pos_x() + self.targetArrowOffsetX,
+          self.player.text:pos_y() + self.targetArrowOffsetY)
+      end
       should_show = true
     end
   end
@@ -1599,6 +1639,10 @@ function ui:update_party()
         if party_member ~= nil or not self.isLocked then
           -- this slot is actually in use
           self:update_party_frame(element, party_member)
+          if party_member and party_member.mob and party_member.mob.id == self.currentTarget then
+            self:move_target_arrow(element.text:pos_x() + self.targetArrowOffsetX,
+              element.text:pos_y() + self.targetArrowOffsetY)
+          end
           should_show[key] = true
         end
       end
@@ -1763,6 +1807,10 @@ function ui:update_alliance()
         if alliance_member ~= nil or not self.isLocked then
           -- this slot is actually in use
           self:update_alliance_frame(element, alliance_member)
+          if alliance_member and alliance_member.mob and alliance_member.mob.id == self.currentTarget then
+            self:move_target_arrow(element.text:pos_x() + self.targetArrowOffsetX,
+              element.text:pos_y() + self.targetArrowOffsetY)
+          end
           should_show[key] = true
         end
       end
@@ -1855,7 +1903,25 @@ function ui:update_alliance_frame(element, alliance_member)
   end
 end
 
+function ui:update_target_arrow()
+  -- the target arrow is actually moved around by the other frames, so
+  -- this is only used for things they cannot do.
+
+  if self.didTargetMatch == false or self.currentTarget == 0 then
+    -- nothing targetted
+    self.target_arrow:hide()
+  end
+end
+
+function ui:move_target_arrow(x, y)
+  self.target_arrow:pos(x, y)
+  self.target_arrow:show()
+  self.didTargetMatch = true
+end
+
 function ui:update_gui()
+  self.didTargetMatch = false
+
   if self.isCreated == false or self.isVisible == false then
     return
   end
@@ -1867,6 +1933,7 @@ function ui:update_gui()
   self:update_battle_target()
   self:update_party()
   self:update_alliance()
+  self:update_target_arrow()
 end
 
 function ui:update_pet_tp(tp)
@@ -1883,6 +1950,10 @@ function ui:update_pet_mp(mpp)
   end
 
   self:update_pet_frame(nil, mpp, nil)
+end
+
+function ui:update_current_target(target_id)
+  self.currentTarget = target_id
 end
 
 function ui:handle_mouse(type, x, y, delta)

@@ -1,1 +1,4 @@
 data/settings.xml
+icon_extractor.lua
+raw_monster_data.lua
+priv_lib/

@@ -230,7 +230,6 @@ function ui:destroy()
     a24 = {},
     a25 = {}
   }
-  self.target_arrow = {}
   self.config = {}
   self.settings = {}
   self.theme = {}
@@ -248,6 +247,7 @@ function ui:destroy()
   self.draggable_groups = {}
   -- Step 4.5: destroy the target arrow
   self.target_arrow:destroy()
+  self.target_arrow = {}
 
   coroutine.sleep(1.5)
   self.isVisible = true

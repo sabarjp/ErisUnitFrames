@@ -254,13 +254,13 @@ function buffs:update_buffs(buffs)
           })
 
           new_buff_bg:size(self._buff_width, self._buff_height)
-          new_buff_bg:path(windower.addon_path .. 'icons/bg.bmp')
-          new_buff_bg:fit(false)
+          new_buff_bg:path(windower.addon_path .. 'icons/bg.png')
           new_buff_bg:repeat_xy(1, 1)
           new_buff_bg:pos(new_x, new_y)
           new_buff_bg:draggable(false)
           new_buff_bg:alpha(255)
           new_buff_bg:color(unpack(bg_color))
+          new_buff_bg:fit(false)
         end
 
         local new_buff_img = images.new({
@@ -269,11 +269,11 @@ function buffs:update_buffs(buffs)
           }
         })
 
-        new_buff_img:size(self._buff_width, self._buff_height)
+        new_buff_img:size(self._buff_width - 2, self._buff_height - 2)
         new_buff_img:path(windower.addon_path .. 'icons/' .. buff.buff_id .. '.bmp')
         new_buff_img:fit(false)
         new_buff_img:repeat_xy(1, 1)
-        new_buff_img:pos(new_x, new_y)
+        new_buff_img:pos(new_x + 1, new_y + 1)
         new_buff_img:draggable(false)
         new_buff_img:alpha(255)
 
@@ -326,10 +326,10 @@ function buffs:update_buffs(buffs)
         -- Only update the position if it is actually changing
         if self._buffs[buff_key].current_x ~= new_x or self._buffs[buff_key].current_y ~= new_y then
           if self._buffs[buff_key].background then
-            self._buffs[buff_key].background:pos(new_x, new_y) -- Update position
+            self._buffs[buff_key].background:pos(new_x, new_y)  -- Update position
           end
-          self._buffs[buff_key].image:pos(new_x, new_y)        -- Update position
-          self._buffs[buff_key].current_x = new_x              -- Store new position
+          self._buffs[buff_key].image:pos(new_x + 1, new_y + 1) -- Update position
+          self._buffs[buff_key].current_x = new_x               -- Store new position
           self._buffs[buff_key].current_y = new_y
         end
       end

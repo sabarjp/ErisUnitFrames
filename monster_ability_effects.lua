@@ -272,6 +272,8 @@ return {
   -- crawler family
   [344] = { id = 344, en = "Sticky Thread", status = { 13 }, duration = 180 },   -- slowed
   [1581] = { id = 1581, en = "Sticky Thread", status = { 13 }, duration = 180 }, -- slowed
+  [346] = { id = 346, en = "Cocoon", status = { 93 }, duration = 180 },          -- defense up
+  [1583] = { id = 1583, en = "Cocoon", status = { 93 }, duration = 180 },        -- defense up
   [345] = { id = 345, en = "Poison Breath", status = { 3 }, duration = 120 },    -- poisoned
   [1582] = { id = 1582, en = "Poison Breath", status = { 3 }, duration = 120 },  -- poisoned
 
@@ -572,8 +574,8 @@ return {
   [1603] = { id = 1603, en = "Baleful Gaze", status = { 7 }, duration = 120 },                                   -- petrification
   [407] = { id = 407, en = "Poison Pick", status = { 3 }, duration = 90 },                                       -- poison
   [1600] = { id = 1600, en = "Poison Pick", status = { 3 }, duration = 90 },                                     -- poison
-  [410] = { id = 410, en = "Sound Blast", status = { 140 }, duration = 120 },                                    -- INT Down
-  [1602] = { id = 1602, en = "Sound Blast", status = { 140 }, duration = 120 },                                  -- INT Down
+  [410] = { id = 410, en = "Sound Blast", status = { 140 }, duration = 360 },                                    -- INT Down
+  [1602] = { id = 1602, en = "Sound Blast", status = { 140 }, duration = 360 },                                  -- INT Down
   [408] = { id = 408, en = "Sound Vacuum", status = { 6 }, duration = 120 },                                     -- silence
   [1601] = { id = 1601, en = "Sound Vacuum", status = { 6 }, duration = 120 },                                   -- silence
   [1335] = { id = 1335, en = "Toxic Pick", status = { 3, 31 }, duration = 120 },                                 -- poison, plague
@@ -746,7 +748,7 @@ return {
   [3218] = { id = 3218, en = "Villainous Rebuke", status = { 10 }, duration = 10 },                                -- stun
   [3446] = { id = 3446, en = "Villainous Rebuke", status = { 10 }, duration = 10 },                                -- stun
   -- ghost family
-  [476] = { id = 476, en = "Curse", status = { 9 }, duration = 120 },                                              -- curse
+  [476] = { id = 476, en = "Curse", status = { 9 }, duration = 1800 },                                             -- curse
   [477] = { id = 477, en = "Dark Sphere", status = { 5 }, duration = 180 },                                        -- blindness
   [474] = { id = 474, en = "Fear Touch", status = { 13 }, duration = 180 },                                        -- slow
   [475] = { id = 475, en = "Terror Touch", status = { 147 }, duration = 120 },                                     -- Attack Down

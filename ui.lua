@@ -1,4 +1,5 @@
 local grouper = require("component_group")
+local socket = require("socket")
 
 -- singleton table-style global
 ui = {
@@ -6,11 +7,17 @@ ui = {
   isVisible = true,
   isCreated = false,
 
+  -- track if we have zoned recently, since it means names get recalculated
+  didZone = false,
+
   -- the current target, which helps us highlight UI frames
   currentTarget = 0,
 
   -- whether or not we moved the target arrow to something during this render; used to hide arrow
   didTargetMatch = false,
+
+  -- tracks if the render has completed, to prevent the main call from going too fast
+  isDoneRendering = true,
 
   targetArrowOffsetX = -34,
   targetArrowOffsetY = -6,
@@ -251,6 +258,10 @@ function ui:destroy()
 
   coroutine.sleep(1.5)
   self.isVisible = true
+end
+
+function ui:setDidZone(flag)
+  self.didZone = flag
 end
 
 function ui:create()
@@ -867,13 +878,20 @@ function ui:register_handler(event, action, group_object, target)
 end
 
 function ui:show()
+  --debug_print('Showing the UI')
+
   self.isVisible = true
   -- no need to actually show all items since the gui loop will do it next tick
 end
 
 function ui:hide()
+  --debug_print('Hiding the UI')
   self.isVisible = false
 
+  self:_hide()
+end
+
+function ui:_hide()
   self.player.text:hide()
   self.player.health_bar:hide()
   self.player.magic_bar:hide()
@@ -898,7 +916,9 @@ function ui:hide()
 
   for i = 1, 5, 1 do
     local key = 'p' .. i
-    self.party[key].text:hide()
+    if self.party[key].text.visible then
+      self.party[key].text:hide()
+    end
     self.party[key].health_bar:hide()
     self.party[key].magic_bar:hide()
     self.party[key].tp_bar:hide()
@@ -1082,6 +1102,10 @@ function ui:has_string_dep_changed(element_id, party_data, mob_data)
 end
 
 function ui:update_player()
+  if self.isCreated == false or self.isVisible == false then
+    return
+  end
+
   local player = windower.ffxi.get_player()
   local should_show = false
   local size_state_changed = false
@@ -1120,7 +1144,7 @@ function ui:update_player()
   set_visibility(self.player.buffs, self.config.player.buffs.disabled)
 
   if size_state_changed then
-    self.player.click_group:calculate_bounding_box(0.1)
+    self.player.click_group:calculate_bounding_box()
   end
 end
 
@@ -1227,7 +1251,7 @@ function ui:update_player_frame(player)
 
     -- Adjust bounding box if needed
     if size_changed then
-      self.player.click_group:calculate_bounding_box(2.0)
+      self.player.click_group:calculate_bounding_box()
     end
   end
 
@@ -1244,6 +1268,10 @@ function ui:update_player_frame(player)
 end
 
 function ui:update_pet()
+  if self.isCreated == false or self.isVisible == false then
+    return
+  end
+
   local player = windower.ffxi.get_player()
   local pet = windower.ffxi.get_mob_by_target('pet')
 
@@ -1291,7 +1319,7 @@ function ui:update_pet()
   set_visibility(self.pet.buffs, self.config.pet.buffs.disabled)
 
   if size_state_changed then
-    self.pet.click_group:calculate_bounding_box(0.1)
+    self.pet.click_group:calculate_bounding_box()
   end
 end
 
@@ -1374,11 +1402,15 @@ function ui:update_pet_frame(pet, mpp, tp)
 
   -- Adjust bounding box if needed
   if size_changed then
-    self.pet.click_group:calculate_bounding_box(2.0)
+    self.pet.click_group:calculate_bounding_box()
   end
 end
 
 function ui:update_target()
+  if self.isCreated == false or self.isVisible == false then
+    return
+  end
+
   local player = windower.ffxi.get_player()
   local target = windower.ffxi.get_mob_by_target('t')
 
@@ -1467,11 +1499,15 @@ function ui:update_target()
   set_visibility(self.target.buffs, self.config.target.buffs.disabled)
 
   if size_state_changed then
-    self.target.click_group:calculate_bounding_box(0.1)
+    self.target.click_group:calculate_bounding_box()
   end
 end
 
 function ui:update_sub_target()
+  if self.isCreated == false or self.isVisible == false then
+    return
+  end
+
   local player = windower.ffxi.get_player()
   local sub_target = windower.ffxi.get_mob_by_target('st')
 
@@ -1543,11 +1579,15 @@ function ui:update_sub_target()
   set_visibility(self.sub_target.health_bar, self.config.sub_target.health_bar.disabled)
 
   if size_state_changed then
-    self.sub_target.click_group:calculate_bounding_box(0.1)
+    self.sub_target.click_group:calculate_bounding_box()
   end
 end
 
 function ui:update_battle_target()
+  if self.isCreated == false or self.isVisible == false then
+    return
+  end
+
   local target = windower.ffxi.get_mob_by_target('t')
   local battle_target = windower.ffxi.get_mob_by_target('bt')
 
@@ -1589,11 +1629,15 @@ function ui:update_battle_target()
   set_visibility(self.battle_target.text, self.config.battle_target.nameplate.disabled)
 
   if size_state_changed then
-    self.battle_target.click_group:calculate_bounding_box(0.1)
+    self.battle_target.click_group:calculate_bounding_box()
   end
 end
 
 function ui:update_party()
+  if self.isCreated == false or self.isVisible == false then
+    return
+  end
+
   local party = windower.ffxi.get_party()
   local player = windower.ffxi.get_player()
 
@@ -1661,7 +1705,7 @@ function ui:update_party()
     set_visibility(key, element.buffs, self.config.party.buffs.disabled or element.missing_bar_data)
 
     if size_state_changed[key] then
-      element.click_group:calculate_bounding_box(0.1)
+      element.click_group:calculate_bounding_box()
     end
   end
 end
@@ -1685,11 +1729,12 @@ function ui:update_party_frame(element, party_member)
     if party_member.zone ~= current_zone then
       -- party member in another zone
 
-      if self:has_string_dep_changed(tostring(element.text), party_member, party_member.mob) then
+      if self.didZone or self:has_string_dep_changed(tostring(element.text), party_member, party_member.mob) then
         local temp_name = party_member.name .. '\n   ~ ' .. res.zones[party_member.zone].search
         element.text:text(temp_name)
         element.missing_bar_data = true
         size_changed = true
+        self.didZone = false
       end
     else
       -- party member is in our zone
@@ -1698,6 +1743,7 @@ function ui:update_party_frame(element, party_member)
           local formatted_text = self:format_text(config_value, party_member, party_member.mob)
           bar:text(formatted_text)
           size_changed = true
+          self.didZone = false
         end
         if text_color and (not bar:text_color() or not table_equals(bar:text_color(), text_color)) then
           bar:text_color(unpack(text_color))
@@ -1710,10 +1756,11 @@ function ui:update_party_frame(element, party_member)
       element.missing_bar_data = false
 
       -- Update nameplate
-      if self:has_string_dep_changed(tostring(element.text), party_member, party_member.mob) then
+      if self.didZone or self:has_string_dep_changed(tostring(element.text), party_member, party_member.mob) then
         local formatted_nameplate = self:format_text(self.config.party.nameplate.value, party_member, party_member.mob)
         element.text:text(formatted_nameplate)
         size_changed = true
+        self.didZone = false
       end
 
       -- Update bars
@@ -1721,6 +1768,7 @@ function ui:update_party_frame(element, party_member)
         get_hp_text_color(party_member.hpp))
       update_bar(element.magic_bar, self.config.party.magic_bar.value, party_member.mpp / 100)
       update_bar(element.tp_bar, self.config.party.tp_bar.value, math.min(1000, party_member.tp) / 1000)
+
 
       -- update buffs
       if party_member.mob and party_member.mob.id then
@@ -1730,7 +1778,7 @@ function ui:update_party_frame(element, party_member)
 
       -- Adjust bounding box if needed
       if size_changed then
-        element.click_group:calculate_bounding_box(2.0)
+        element.click_group:calculate_bounding_box()
       end
 
       if party_member.tp >= 1000 then
@@ -1748,6 +1796,10 @@ function ui:update_party_frame(element, party_member)
 end
 
 function ui:update_alliance()
+  if self.isCreated == false or self.isVisible == false then
+    return
+  end
+
   local alliance = windower.ffxi.get_party()
   local player = windower.ffxi.get_player()
 
@@ -1828,7 +1880,7 @@ function ui:update_alliance()
     set_visibility(key, element.tp_bar, self.config.alliance.tp_bar.disabled or element.missing_bar_data)
 
     if size_state_changed[key] then
-      element.click_group:calculate_bounding_box(0.1)
+      element.click_group:calculate_bounding_box()
     end
   end
 end
@@ -1886,7 +1938,7 @@ function ui:update_alliance_frame(element, alliance_member)
 
       -- Adjust bounding box if needed
       if size_changed then
-        element.click_group:calculate_bounding_box(2.0)
+        element.click_group:calculate_bounding_box()
       end
 
       if alliance_member.tp >= 1000 then
@@ -1904,6 +1956,10 @@ function ui:update_alliance_frame(element, alliance_member)
 end
 
 function ui:update_target_arrow()
+  if self.isCreated == false or self.isVisible == false then
+    return
+  end
+
   -- the target arrow is actually moved around by the other frames, so
   -- this is only used for things they cannot do.
 
@@ -1922,9 +1978,11 @@ end
 function ui:update_gui()
   self.didTargetMatch = false
 
-  if self.isCreated == false or self.isVisible == false then
+  if self.isCreated == false or self.isVisible == false or self.isDoneRendering == false then
     return
   end
+
+  self.isDoneRendering = false
 
   self:update_player()
   self:update_pet()
@@ -1934,6 +1992,9 @@ function ui:update_gui()
   self:update_party()
   self:update_alliance()
   self:update_target_arrow()
+
+
+  self.isDoneRendering = true
 end
 
 function ui:update_pet_tp(tp)

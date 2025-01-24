@@ -49,7 +49,7 @@ function status_effects:handle_action(data)
           local message_id = action.message
 
           --------------------------------------------------------------------------------
-          -- MAGIC SPELL
+          -- MAGIC SPELL APPLY BUFF
           --------------------------------------------------------------------------------
           if message_id == 2       -- cast and deal damage
               or message_id == 252 -- cast and magic burst
@@ -78,7 +78,7 @@ function status_effects:handle_action(data)
             end
 
             --------------------------------------------------------------------------------
-            -- JOB ABILITY
+            -- JOB ABILITY APPLY BUFF
             --------------------------------------------------------------------------------
           elseif message_id == 100 -- use ability, no target
               or message_id == 115 -- use ability, enhance self
@@ -117,7 +117,7 @@ function status_effects:handle_action(data)
             end
 
             --------------------------------------------------------------------------------
-            -- WEAPON SKILL / MOB ABILITY
+            -- WEAPON SKILL / MOB ABILITY APPLY BUFF
             --------------------------------------------------------------------------------
           elseif message_id == 185 -- use weaponskill, target damange
               or message_id == 186 -- use weaponskill, target status
@@ -130,13 +130,13 @@ function status_effects:handle_action(data)
             local buff_id_lookup = monster_abilities[ability_id] and monster_abilities[ability_id].status
             local type = 'Weaponskill'
 
-            -- if ability_id < 256 then
-            --   local ws = res.weapon_skills[ability_id]
-            --   print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
-            -- else
-            --   local ws = res.monster_abilities[ability_id]
-            --   print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
-            -- end
+            if ability_id < 256 then
+              local ws = res.weapon_skills[ability_id]
+              debug_print(ws.en .. ' ' .. tostring(ability_id))
+            else
+              local ws = res.monster_abilities[ability_id]
+              debug_print(ws.en .. ' ' .. tostring(ability_id))
+            end
 
             if message_id == 185 then
               -- It is a damage event, so we have to perform a lookup for its status.
@@ -179,15 +179,53 @@ function status_effects:handle_action(data)
             self:add_buff_pup(target.id, nil, 299)
 
             --------------------------------------------------------------------------------
-            -- ERASE
+            -- MAGIC REMOVE BUFF
             --------------------------------------------------------------------------------
-          elseif message_id == 341
-              or message_id == 342 then
+          elseif message_id == 341 -- erase
+              or message_id == 342 -- erase
+              or message_id == 83  -- na spell
+          then
+            debug_print('ma removal   ability=' .. data.param .. ', param=' .. action.param)
+
             local ability_id = data.param
-            local buff_id = res.job_abilities[ability_id].status or action.param
+            local buff_id = action.param
 
             if buff_id then
               self:remove_buff_with_priority(target.id, buff_id)
+            end
+
+            --------------------------------------------------------------------------------
+            -- JA REMOVE BUFF
+            --------------------------------------------------------------------------------
+          elseif message_id == 123
+          then
+            debug_print('ja removal   ability=' .. data.param .. ', param=' .. action.param)
+
+
+            local ability_id = data.param
+            local buff_id = action.param
+
+            if buff_id then
+              self:remove_buff_with_priority(target.id, buff_id)
+            end
+
+            --------------------------------------------------------------------------------
+            -- TAKE DAMAGE, NO EXPLICIT SOURCE
+            --------------------------------------------------------------------------------
+          elseif message_id == 264       -- take damage
+          then
+            local source_id = data.param -- data.param will capture the source id in original message
+
+            if source == "WEAPONSKILL" then
+              local buff_id_lookup = monster_abilities[source_id] and monster_abilities[source_id].status
+
+              -- It is a damage event, so we have to perform a lookup for its status.
+              if buff_id_lookup then
+                for _, single_buff_id in pairs(buff_id_lookup) do
+                  local target_id = target.id
+                  self:add_buff(target_id, source, source_id, single_buff_id, type, actor_id)
+                end
+              end
             end
 
             --------------------------------------------------------------------------------
@@ -220,7 +258,7 @@ function status_effects:handle_action(data)
           else
             local spell_id = data.param
             if spell_id > 256 and spell_id < 4500 then
-              --print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
+              debug_print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
             end
           end
         end
@@ -268,7 +306,7 @@ function status_effects:handle_action_message(data)
   else
     local buff_id = data.buff_id
     if buff_id < 5000 then
-      --print('did not ham capture ' .. buff_id .. ' -> ' .. data.message_id)
+      debug_print('did not ham capture ' .. buff_id .. ' -> ' .. data.message_id)
     end
 
     -- local target = windower.ffxi.get_mob_by_target('t')

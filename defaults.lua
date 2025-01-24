@@ -2,6 +2,8 @@ local defaults = {}
 
 defaults.theme = "ff11"
 
+defaults.debugMode = false
+
 
 defaults.player = {
   disabled = false,

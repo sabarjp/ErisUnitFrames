@@ -48,6 +48,8 @@ status_effects = require('status_effects')
 monster_abilities = require('monster_ability_effects')
 buff_types = require('buff_types')
 
+euf_debug = false
+
 local isLoaded = false
 
 local function initialize()
@@ -58,7 +60,14 @@ local function initialize()
     windower.add_to_chat(8, 'EUF Failed to find: themes/' .. settings.theme .. '.lua')
   else
     config.save(settings)
+    euf_debug = settings.debugMode
     ui:initialize(settings, theme)
+  end
+end
+
+function debug_print(text)
+  if euf_debug then
+    windower.add_to_chat(8, text)
   end
 end
 
@@ -75,6 +84,10 @@ windower.register_event('login', function()
     isLoaded = true
     initialize()
   end
+end)
+
+windower.register_event('logout', function()
+  ui:destroy()
 end)
 
 
@@ -125,6 +138,7 @@ windower.register_event('incoming chunk', function(id, original, modified, injec
   elseif id == 0x00A then -- load new zone
     --ui:show()
   elseif id == 0x01D then -- complete load
+    ui:setDidZone(true)
     ui:show()
   end
 end)

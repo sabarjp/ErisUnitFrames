@@ -2,7 +2,18 @@ status_effects = {
   is_initialized = false,
 
   -- this will be by target id, for now
-  buffs = {}
+  buffs = {},
+
+  -- we track what zone a buff was applied in, because many buffs fall off when zoning
+  current_zone = -1,
+
+  -- lookup table for a target id and the last known zone they were in -- a change here will remove their ja buffs
+  target_zone = {},
+
+  -- lookup table for a player name to an id, because their id is lost when the are in a different zone.
+  party_player_ids = {},
+
+  current_tick = 1,
 }
 
 function status_effects:initialize()
@@ -70,13 +81,13 @@ end
 function status_effects:update()
   for target_id, target_buffs in pairs(self.buffs) do
     for buff_id, spell_table in pairs(target_buffs) do
-      for spell_id, buff in pairs(spell_table) do
+      for composite_key, buff in pairs(spell_table) do
         -- Update remaining time
         buff.remaining_time = buff.end_time - os.clock()
 
         -- Remove expired buffs
         if buff.remaining_time <= 0 then
-          spell_table[spell_id] = nil -- Remove this specific spell_id entry
+          spell_table[composite_key] = nil -- Remove this specific spell_id entry
 
           -- Clean up empty buff_id entry
           if next(spell_table) == nil then
@@ -91,6 +102,35 @@ function status_effects:update()
       self.buffs[target_id] = nil
     end
   end
+
+  -- check party / alliance zones every few seconds to keep them up-to-date and
+  -- purge buffs that fall off across zones
+
+  if self.current_tick % 120 then
+    if self.current_tick % 120000 then
+      -- reset the list once an hour or so
+      self.party_player_ids = {}
+    end
+
+    local party = windower.ffxi.get_party()
+    if party ~= nil then
+      for _, key in ipairs({ 'p1', 'p2', 'p3', 'p4', 'p5', 'a10', 'a11', 'a12', 'a13', 'a14', 'a15', 'a20', 'a21', 'a22', 'a23', 'a24', 'a25' })
+      do
+        local party_member = party[key]
+        if party_member ~= nil then
+          -- update id mapping
+          if party_member.mob then
+            self.party_player_ids[party_member.name] = party_member.mob.id
+          end
+
+          -- update zone
+          self:update_target_zone(self:get_id_from_player_name(party_member.name), party_member.zone)
+        end
+      end
+    end
+  end
+
+  self.current_tick = self.current_tick + 1
 end
 
 function status_effects:handle_action(data)
@@ -107,7 +147,7 @@ function status_effects:handle_action(data)
           local message_id = action.message
 
           --------------------------------------------------------------------------------
-          -- MAGIC SPELL
+          -- MAGIC SPELL APPLY BUFF
           --------------------------------------------------------------------------------
           if message_id == 2       -- cast and deal damage
               or message_id == 252 -- cast and magic burst
@@ -136,7 +176,7 @@ function status_effects:handle_action(data)
             end
 
             --------------------------------------------------------------------------------
-            -- JOB ABILITY
+            -- JOB ABILITY APPLY BUFF
             --------------------------------------------------------------------------------
           elseif message_id == 100 -- use ability, no target
               or message_id == 115 -- use ability, enhance self
@@ -175,7 +215,7 @@ function status_effects:handle_action(data)
             end
 
             --------------------------------------------------------------------------------
-            -- WEAPON SKILL / MOB ABILITY
+            -- WEAPON SKILL / MOB ABILITY APPLY BUFF
             --------------------------------------------------------------------------------
           elseif message_id == 185 -- use weaponskill, target damange
               or message_id == 186 -- use weaponskill, target status
@@ -188,13 +228,13 @@ function status_effects:handle_action(data)
             local buff_id_lookup = monster_abilities[ability_id] and monster_abilities[ability_id].status
             local type = 'Weaponskill'
 
-            -- if ability_id < 256 then
-            --   local ws = res.weapon_skills[ability_id]
-            --   print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
-            -- else
-            --   local ws = res.monster_abilities[ability_id]
-            --   print(ws.en .. ' ' .. tostring(ability_id) .. ' -> count ' .. tostring(#data.targets))
-            -- end
+            if ability_id < 256 then
+              local ws = res.weapon_skills[ability_id]
+              debug_print(ws.en .. ' ' .. tostring(ability_id))
+            else
+              local ws = res.monster_abilities[ability_id]
+              debug_print(ws.en .. ' ' .. tostring(ability_id))
+            end
 
             if message_id == 185 then
               -- It is a damage event, so we have to perform a lookup for its status.
@@ -237,15 +277,53 @@ function status_effects:handle_action(data)
             self:add_buff_pup(target.id, nil, 299)
 
             --------------------------------------------------------------------------------
-            -- ERASE
+            -- MAGIC REMOVE BUFF
             --------------------------------------------------------------------------------
-          elseif message_id == 341
-              or message_id == 342 then
+          elseif message_id == 341 -- erase
+              or message_id == 342 -- erase
+              or message_id == 83  -- na spell
+          then
+            debug_print('ma removal   ability=' .. data.param .. ', param=' .. action.param)
+
             local ability_id = data.param
-            local buff_id = res.job_abilities[ability_id].status or action.param
+            local buff_id = action.param
 
             if buff_id then
               self:remove_buff_with_priority(target.id, buff_id)
+            end
+
+            --------------------------------------------------------------------------------
+            -- JA REMOVE BUFF
+            --------------------------------------------------------------------------------
+          elseif message_id == 123
+          then
+            debug_print('ja removal   ability=' .. data.param .. ', param=' .. action.param)
+
+
+            local ability_id = data.param
+            local buff_id = action.param
+
+            if buff_id then
+              self:remove_buff_with_priority(target.id, buff_id)
+            end
+
+            --------------------------------------------------------------------------------
+            -- TAKE DAMAGE, NO EXPLICIT SOURCE
+            --------------------------------------------------------------------------------
+          elseif message_id == 264       -- take damage
+          then
+            local source_id = data.param -- data.param will capture the source id in original message
+
+            if source == "WEAPONSKILL" then
+              local buff_id_lookup = monster_abilities[source_id] and monster_abilities[source_id].status
+
+              -- It is a damage event, so we have to perform a lookup for its status.
+              if buff_id_lookup then
+                for _, single_buff_id in pairs(buff_id_lookup) do
+                  local target_id = target.id
+                  self:add_buff(target_id, source, source_id, single_buff_id, type, actor_id)
+                end
+              end
             end
 
             --------------------------------------------------------------------------------
@@ -278,7 +356,7 @@ function status_effects:handle_action(data)
           else
             local spell_id = data.param
             if spell_id > 256 and spell_id < 4500 then
-              --print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
+              debug_print('did not ha capture ' .. spell_id .. ' -> ' .. message_id)
             end
           end
         end
@@ -307,6 +385,7 @@ function status_effects:handle_action_message(data)
       or data.message_id == 605 -- target falls to the ground after additional effect
       or data.message_id == 646 -- target falls to the ground after ja
   then
+    debug_print('death detected for ' .. data.target_id)
     self:remove_buff(data.target_id)
   elseif data.message_id == 203 -- gains status
       or data.message_id == 205 -- gains status
@@ -326,7 +405,7 @@ function status_effects:handle_action_message(data)
   else
     local buff_id = data.buff_id
     if buff_id < 5000 then
-      --print('did not ham capture ' .. buff_id .. ' -> ' .. data.message_id)
+      debug_print('did not ham capture ' .. buff_id .. ' -> ' .. data.message_id)
     end
 
     -- local target = windower.ffxi.get_mob_by_target('t')
@@ -408,6 +487,9 @@ function status_effects:add_buff(target_id, source_type, source_id, buff_id, typ
   elseif source_type == 'WEAPONSKILL' then
     self:add_buff_ws(target_id, source_id, buff_id, type, actor_id)
   end
+
+  -- update target last known zone
+  self:update_target_zone(target_id, self.current_zone)
 end
 
 function status_effects:get_known_duration(spell_id)
@@ -427,6 +509,9 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
   local duration = spell.duration or self:get_known_duration(spell_id) or 60
 
   if spell then
+    -- Prepare composite key
+    local composite_key = 'ma:' .. spell_id
+
     -- Prepare data structures
     if not self.buffs[target_id] then
       self.buffs[target_id] = {}
@@ -453,19 +538,19 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
     -- next, delete any explicit overwrites, example dia 2 overwrites dia 1
     if spell.overwrites then
       for _, overwritten_id in pairs(spell.overwrites) do
-        self:remove_buff_given_by_id(target_id, overwritten_id)
+        self:remove_buff_given_by_id(target_id, 'ma:' .. overwritten_id)
       end
     end
 
     -- handle special "stackable" spells, such as certain bard songs that stack with
     -- themselves as opposed to overwriting like most spells do
     local is_stackable = stackable_spells[spell_id]
-    if not is_stackable then
+    if not is_stackable and self.buffs[target_id] then
       for existing_buff_id, spell_table in pairs(self.buffs[target_id]) do
         if existing_buff_id == buff_id then
-          for existing_spell_id, buff in pairs(spell_table) do
+          for existing_composite_key, buff in pairs(spell_table) do
             -- Remove non-stackable buffs of the same type
-            self:remove_buff_given_by_id(target_id, existing_spell_id)
+            self:remove_buff_given_by_id(target_id, existing_composite_key)
           end
         end
       end
@@ -486,11 +571,11 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       local bard_songs = {}
 
       for b_id, spell_table in pairs(target_buffs) do
-        for s_id, buff in pairs(spell_table) do
+        for c_id, buff in pairs(spell_table) do
           if buff.type == 'BardSong' or buff.type == 'CorsairRoll' then
             total_songs_rolls = total_songs_rolls + 1
             if buff.actor_id == bard_id and buff.type == 'BardSong' then
-              table.insert(bard_songs, { buff_id = b_id, spell_id = s_id, duration = buff.end_time - os.clock() })
+              table.insert(bard_songs, { buff_id = b_id, composite_id = c_id, duration = buff.end_time - os.clock() })
             end
           end
         end
@@ -501,9 +586,9 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
 
       -- Check if the song already exists and can just be refreshed
       for _, song in ipairs(bard_songs) do
-        if song.buff_id == buff_id and song.spell_id == spell_id then
+        if song.buff_id == buff_id and song.composite_id == composite_key then
           -- Refresh the duration
-          self.buffs[target_id][buff_id][spell_id].end_time = os.clock() + duration
+          self.buffs[target_id][buff_id][composite_key].end_time = os.clock() + duration
           return -- Stop here since we just refreshed
         end
       end
@@ -528,10 +613,10 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
         local oldest_time = math.huge
 
         for b_id, spell_table in pairs(target_buffs) do
-          for s_id, buff in pairs(spell_table) do
+          for c_id, buff in pairs(spell_table) do
             if buff.type == 'BardSong' or buff.type == 'CorsairRoll' then
               if buff.end_time < oldest_time then
-                oldest_buff = { buff_id = b_id, spell_id = s_id }
+                oldest_buff = { buff_id = b_id, composite_key = c_id }
                 oldest_time = buff.end_time
               end
             end
@@ -539,7 +624,7 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
         end
 
         if oldest_buff then
-          self.buffs[target_id][oldest_buff.buff_id][oldest_buff.spell_id] = nil -- Remove the oldest
+          self.buffs[target_id][oldest_buff.buff_id][oldest_buff.composite_key] = nil -- Remove the oldest
 
           -- Clean up if the spell table is empty
           if next(self.buffs[target_id][oldest_buff.buff_id]) == nil then
@@ -547,6 +632,47 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
           end
         end
       end
+    end
+
+    -- Red Mage Composure Logic
+    --   1. Duration < 30 minutes
+    --   2. Magic is black or white
+    --   3. Enhancing magic only
+    --   4. Capped at 30 minutes
+    --   5. Only on buffing self
+
+    local composure_buff = nil
+    if self.buffs and self.buffs[target_id] and self.buffs[target_id][419] and self.buffs[target_id][419]['ja:247'] then
+      composure_buff = self.buffs[target_id][419]['ja:247']
+    end
+
+    if composure_buff
+        and composure_buff.actor_id == actor_id
+        and duration < 1800
+        and (type == "WhiteMagic" or type == "BlackMagic")
+        and (spell.skill and spell.skill == 34)
+    then
+      duration = math.min(duration * 3, 1800)
+    end
+
+    -- Scholar Perpetuance Logic
+    --   1. Duration < 30 minutes
+    --   2. Magic is white
+    --   3. Enhancing magic only
+    --   4. Capped at 30 minutes
+    --   5. On buffing anyone, not just self.
+    local perpetuance_buff = nil
+    if self.buffs and self.buffs[actor_id] and self.buffs[actor_id][469] and self.buffs[actor_id][469]['ja:316'] then
+      perpetuance_buff = self.buffs[actor_id][469]['ja:316']
+    end
+
+    if perpetuance_buff
+        and perpetuance_buff.actor_id == actor_id
+        and duration < 1800
+        and type == "WhiteMagic"
+        and (spell.skill and spell.skill == 34)
+    then
+      duration = math.min(duration * 2, 1800)
     end
 
     -- Ensure the table structure exists
@@ -557,18 +683,16 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       self.buffs[target_id][buff_id] = {}
     end
 
-
-
     -- Add the new buff
-    self.buffs[target_id][buff_id][spell_id] = {
+    self.buffs[target_id][buff_id][composite_key] = {
       buff_id = buff_id,
       end_time = os.clock() + duration,
       originating_spell = spell.en,
-      originating_id = spell_id,
+      originating_id = composite_key,
       actor_id = actor_id,
       target_id = target_id,
       type = type,
-      category = buff_types[buff_id] or ""
+      category = buff_types[buff_id] or "",
     }
   end
 end
@@ -583,6 +707,9 @@ function status_effects:add_buff_ws(target_id, ability_id, buff_id, type, actor_
   -- end
 
   if ability and ability.duration then
+    -- Prepare composite key
+    local composite_key = 'ws:' .. ability_id
+
     -- Prepare data structures
     if not self.buffs[target_id] then
       self.buffs[target_id] = {}
@@ -600,11 +727,11 @@ function status_effects:add_buff_ws(target_id, ability_id, buff_id, type, actor_
     end
 
     -- Add the new buff
-    self.buffs[target_id][buff_id][ability_id] = {
+    self.buffs[target_id][buff_id][composite_key] = {
       buff_id = buff_id,
       end_time = os.clock() + ability.duration,
       originating_spell = ability.en,
-      originating_id = ability_id,
+      originating_id = composite_key,
       actor_id = actor_id,
       target_id = target_id,
       type = type,
@@ -616,6 +743,9 @@ end
 function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_id)
   local ability = res.job_abilities[ability_id]
   if ability and ability.duration then
+    -- Prepare composite key
+    local composite_key = 'ja:' .. ability_id
+
     -- Prepare data structures
     if not self.buffs[target_id] then
       self.buffs[target_id] = {}
@@ -628,7 +758,7 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
     local overwrites = ja_overwrites[ability_id]
     if overwrites then
       for _, overwritten_id in pairs(overwrites) do
-        self:remove_buff_given_by_id(target_id, overwritten_id)
+        self:remove_buff_given_by_id(target_id, 'ja:' .. overwritten_id)
       end
     end
 
@@ -643,11 +773,11 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
       local corsair_rolls = {}
 
       for b_id, spell_table in pairs(target_buffs) do
-        for s_id, buff in pairs(spell_table) do
+        for c_id, buff in pairs(spell_table) do
           if buff.type == 'BardSong' or buff.type == 'CorsairRoll' then
             total_songs_rolls = total_songs_rolls + 1
             if buff.actor_id == corsair_id and buff.type == 'CorsairRoll' then
-              table.insert(corsair_rolls, { buff_id = b_id, ability_id = s_id, duration = buff.end_time - os.clock() })
+              table.insert(corsair_rolls, { buff_id = b_id, composite_key = c_id, duration = buff.end_time - os.clock() })
             end
           end
         end
@@ -658,9 +788,9 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
 
       -- Check if the roll already exists and can just be refreshed
       for _, roll in ipairs(corsair_rolls) do
-        if roll.buff_id == buff_id and roll.ability_id == ability_id then
+        if roll.buff_id == buff_id and roll.composite_key == composite_key then
           -- Refresh the duration
-          self.buffs[target_id][buff_id][ability_id].end_time = os.clock() + ability.duration
+          self.buffs[target_id][buff_id][composite_key].end_time = os.clock() + ability.duration
           return -- Stop here since we just refreshed
         end
       end
@@ -670,7 +800,7 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
         -- Find the shortest duration roll
         table.sort(corsair_rolls, function(a, b) return a.duration < b.duration end)
         local shortest_roll = corsair_rolls[1]
-        self.buffs[target_id][shortest_roll.buff_id][shortest_roll.ability_id] = nil -- Replace it
+        self.buffs[target_id][shortest_roll.buff_id][shortest_roll.composite_key] = nil -- Replace it
 
         -- Clean up if the spell table is empty
         if next(self.buffs[target_id][shortest_roll.buff_id]) == nil then
@@ -685,10 +815,10 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
         local oldest_time = math.huge
 
         for b_id, spell_table in pairs(target_buffs) do
-          for s_id, buff in pairs(spell_table) do
+          for c_id, buff in pairs(spell_table) do
             if buff.type == 'BardSong' or buff.type == 'CorsairRoll' then
               if buff.end_time < oldest_time then
-                oldest_buff = { buff_id = b_id, ability_id = s_id }
+                oldest_buff = { buff_id = b_id, composite_key = c_id }
                 oldest_time = buff.end_time
               end
             end
@@ -696,7 +826,7 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
         end
 
         if oldest_buff then
-          self.buffs[target_id][oldest_buff.buff_id][oldest_buff.ability_id] = nil -- Remove the oldest
+          self.buffs[target_id][oldest_buff.buff_id][oldest_buff.composite_key] = nil -- Remove the oldest
 
           -- Clean up if the spell table is empty
           if next(self.buffs[target_id][oldest_buff.buff_id]) == nil then
@@ -716,11 +846,11 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
     end
 
     -- Add the new buff
-    self.buffs[target_id][buff_id][ability_id] = {
+    self.buffs[target_id][buff_id][composite_key] = {
       buff_id = buff_id,
       end_time = os.clock() + ability.duration,
       originating_spell = ability.en,
-      originating_id = ability_id,
+      originating_id = composite_key,
       actor_id = actor_id,
       target_id = target_id,
       type = type,
@@ -731,10 +861,13 @@ end
 
 function status_effects:add_buff_pup(target_id, ability_id, buff_id)
   if ability_id == nil then
+    -- Prepare composite key
+    local composite_key = 'ja:' .. ability_id
+
     -- overloaded status
     -- remove all maneuvers
     for _, overwritten_id in pairs({ 141, 142, 143, 144, 145, 146, 147, 148 }) do
-      self:remove_buff_given_by_id(target_id, overwritten_id)
+      self:remove_buff_given_by_id(target_id, 'ja:' .. overwritten_id)
     end
 
     -- add overloaded
@@ -745,32 +878,38 @@ function status_effects:add_buff_pup(target_id, ability_id, buff_id)
       self.buffs[target_id][buff_id] = {}
     end
 
-    self.buffs[target_id][buff_id] = {
+    self.buffs[target_id][buff_id][composite_key] = {
+      buff_id = buff_id,
       end_time = os.clock() + 60,
       originating_spell = 'Maneuver',
-      originating_id = ability_id,
+      originating_id = composite_key,
+      actor_id = target_id,
       target_id = target_id,
+      type = 'Maneuver',
       category = buff_types[buff_id] or ""
     }
   end
 end
 
-function status_effects:remove_buff_given_by_id(target_id, id)
+function status_effects:remove_buff_given_by_id(target_id, composite_id)
   if not self.buffs[target_id] then
     return
   end
 
   -- Iterate over all buffs for the target
-  for buff_id, spell_table in pairs(self.buffs[target_id]) do
-    for spell_id, buff in pairs(spell_table) do
-      if buff.originating_id == id then
-        self:remove_buff(target_id, buff_id, spell_id) -- Delegate to remove_buff
+  for buff_id, ability_table in pairs(self.buffs[target_id]) do
+    for composite_key, buff in pairs(ability_table) do
+      if buff.originating_id == composite_id then
+        self:remove_buff(target_id, buff_id, composite_key) -- Delegate to remove_buff
       end
     end
   end
+
+  -- update target last known zone
+  self:update_target_zone(target_id, self.current_zone)
 end
 
-function status_effects:remove_buff(target_id, buff_id, spell_id)
+function status_effects:remove_buff(target_id, buff_id, composite_key)
   if not self.buffs[target_id] then
     return
   end
@@ -778,15 +917,15 @@ function status_effects:remove_buff(target_id, buff_id, spell_id)
   if not buff_id then
     -- If only target_id is provided, remove all buffs for the target
     self.buffs[target_id] = nil
-  elseif not spell_id then
-    -- If no spell_id is provided, remove all buffs of buff_id
+  elseif not composite_key then
+    -- If no composite_key  is provided, remove all buffs of buff_id
     if self.buffs[target_id][buff_id] then
       self.buffs[target_id][buff_id] = nil
     end
   else
-    -- Remove the specific spell_id entry under the buff_id
-    if self.buffs[target_id][buff_id] and self.buffs[target_id][buff_id][spell_id] then
-      self.buffs[target_id][buff_id][spell_id] = nil
+    -- Remove the specific composite_key entry under the buff_id
+    if self.buffs[target_id][buff_id] and self.buffs[target_id][buff_id][composite_key] then
+      self.buffs[target_id][buff_id][composite_key] = nil
 
       -- Clean up buff_id entry if it's empty
       if next(self.buffs[target_id][buff_id]) == nil then
@@ -799,6 +938,9 @@ function status_effects:remove_buff(target_id, buff_id, spell_id)
   if self.buffs[target_id] and next(self.buffs[target_id]) == nil then
     self.buffs[target_id] = nil
   end
+
+  -- update target last known zone
+  self:update_target_zone(target_id, self.current_zone)
 end
 
 -- either removes all buffs matching an id, or only the oldest
@@ -818,19 +960,19 @@ function status_effects:remove_buff_with_priority(target_id, buff_id, remove_all
   else
     -- Remove only the "oldest" buff (based on the smallest end_time)
     if self.buffs[target_id][buff_id] then
-      local oldest_spell_id, oldest_end_time = nil, math.huge
+      local oldest_composite_key, oldest_end_time = nil, math.huge
 
       -- Find the buff with the smallest end_time
-      for spell_id, buff_data in pairs(self.buffs[target_id][buff_id]) do
+      for composite_key, buff_data in pairs(self.buffs[target_id][buff_id]) do
         if buff_data.end_time < oldest_end_time then
-          oldest_spell_id = spell_id
+          oldest_composite_key = composite_key
           oldest_end_time = buff_data.end_time
         end
       end
 
       -- Remove the oldest buff if found
-      if oldest_spell_id then
-        self.buffs[target_id][buff_id][oldest_spell_id] = nil
+      if oldest_composite_key then
+        self.buffs[target_id][buff_id][oldest_composite_key] = nil
       end
 
       -- Clean up buff_id entry if it's empty
@@ -844,6 +986,43 @@ function status_effects:remove_buff_with_priority(target_id, buff_id, remove_all
   if self.buffs[target_id] and next(self.buffs[target_id]) == nil then
     self.buffs[target_id] = nil
   end
+
+  -- update target last known zone
+  self:update_target_zone(target_id, self.current_zone)
+end
+
+-- this removes every buff from everyone other than the player and the party, used
+-- when zoning to reset the buff table since we don't know what is happening after
+-- we zone out
+function status_effects:remove_all_non_party_buffs()
+  -- Fetch the current player ID
+  local player_id = windower.ffxi.get_player().id
+
+  -- Prepare a set of allowed IDs for quick lookup
+  local allowed_ids = {}
+  allowed_ids[player_id] = true -- Always keep the player's buffs
+
+  -- Iterate over the party/alliance to populate allowed IDs using self.party_player_ids
+  local party = windower.ffxi.get_party()
+  if party ~= nil then
+    for _, key in ipairs({ 'p1', 'p2', 'p3', 'p4', 'p5', 'a10', 'a11', 'a12', 'a13', 'a14', 'a15', 'a20', 'a21', 'a22', 'a23', 'a24', 'a25' }) do
+      local party_member = party[key]
+      if party_member and party_member.name then
+        -- Lookup the ID from the party_player_ids table
+        local party_member_id = self.party_player_ids[party_member.name]
+        if party_member_id then
+          allowed_ids[party_member_id] = true
+        end
+      end
+    end
+  end
+
+  -- Iterate through all buffs and remove non-party ones
+  for target_id, _ in pairs(self.buffs) do
+    if not allowed_ids[target_id] then
+      self.buffs[target_id] = nil -- Remove all buffs for this target
+    end
+  end
 end
 
 -- returns as a composite keyed table
@@ -855,11 +1034,16 @@ function status_effects:get_buffs_for_target(target_id)
   local composite_buffs = {}
 
   for buff_id, spell_table in pairs(self.buffs[target_id]) do
-    for spell_id, buff in pairs(spell_table) do
-      local composite_key = buff_id .. ':' .. spell_id
-      composite_buffs[composite_key] = {
+    for composite_key1, buff in pairs(spell_table) do
+      -- Split the composite key (e.g., "s:233", "a:43534", "ws:33")
+      local _, key_id = composite_key1:match("^(%a+):(%d+)$")
+      key_id = tonumber(key_id) -- Convert the numeric part back to a number
+
+      local composite_key2 = buff_id .. ':' .. composite_key1
+
+      composite_buffs[composite_key2] = {
         buff_id = buff_id,
-        spell_id = spell_id,
+        spell_id = key_id, -- need to split spell id out
         end_time = buff.end_time,
         originating_spell = buff.originating_spell,
         originating_id = buff.originating_id,

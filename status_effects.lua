@@ -31,6 +31,11 @@ function status_effects:get_id_from_player_name(player_name)
 end
 
 function status_effects:update_target_zone(target_id, zone)
+  if target_id == -1 then
+    -- we don't know who it is, have to skip :(
+    return
+  end
+
   local existing_zone = self.target_zone[target_id]
 
   if existing_zone and zone == existing_zone then
@@ -40,12 +45,14 @@ function status_effects:update_target_zone(target_id, zone)
 
   -- Handle buffs if the zone has changed
   if existing_zone then
-    --print('Zone has changed from ' .. existing_zone .. ' to ' .. zone .. ', removing JA buffs.')
+    --print(target_id .. ' - Zone has changed from ' .. existing_zone .. ' to ' .. zone .. ', removing JA buffs.')
 
     if self.buffs[target_id] then
       for buff_id, spell_table in pairs(self.buffs[target_id]) do
         for composite_key in pairs(spell_table) do
           local key_type = composite_key:match("^(%a+):%d+$")
+
+          --print(key_type .. ' ' .. composite_key)
 
           if key_type == 'ja' then
             spell_table[composite_key] = nil -- Remove JA buff
@@ -591,7 +598,7 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
         -- Find the shortest duration song
         table.sort(bard_songs, function(a, b) return a.duration < b.duration end)
         local shortest_song = bard_songs[1]
-        self.buffs[target_id][shortest_song.buff_id][shortest_song.composite_key] = nil -- Replace it
+        self.buffs[target_id][shortest_song.buff_id][shortest_song.composite_id] = nil -- Replace it
 
         -- Clean up if the spell table is empty
         if next(self.buffs[target_id][shortest_song.buff_id]) == nil then
@@ -1059,7 +1066,8 @@ end)
 
 windower.register_event('incoming chunk', function(id, original, modified, injected, blocked)
   if id == 0x01D then -- complete load
-    status_effects.current_zone = windower.ffxi.get_info().zone
+    local info = windower.ffxi.get_info()
+    status_effects.current_zone = (info.mog_house and -1) or windower.ffxi.get_info().zone
     status_effects:update_target_zone(windower.ffxi.get_player().id, status_effects.current_zone)
     status_effects:remove_all_non_party_buffs()
   end

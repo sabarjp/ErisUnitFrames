@@ -886,9 +886,11 @@ end
 
 function ui:hide()
   --debug_print('Hiding the UI')
-  self.isVisible = false
+  if self.isCreated then
+    self.isVisible = false
 
-  self:_hide()
+    self:_hide()
+  end
 end
 
 function ui:_hide()

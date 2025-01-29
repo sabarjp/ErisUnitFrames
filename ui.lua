@@ -256,8 +256,7 @@ function ui:destroy()
   self.target_arrow:destroy()
   self.target_arrow = {}
 
-  coroutine.sleep(1.5)
-  self.isVisible = true
+  status_effects:destroy()
 end
 
 function ui:setDidZone(flag)
@@ -1009,6 +1008,22 @@ local function get_hp_text_color(hpp)
   end
 end
 
+function ui:get_tp_text_color(tp, element)
+  if tp >= 1000 then
+    return {
+      element.full_red,
+      element.full_green,
+      element.full_blue
+    }
+  else
+    return {
+      element.red,
+      element.green,
+      element.blue
+    }
+  end
+end
+
 local function get_type_from_mob(mob_data)
   if mob_data == nil then
     return ''
@@ -1245,7 +1260,8 @@ function ui:update_player_frame(player)
     update_bar(self.player.health_bar, self.config.player.health_bar.value, player.vitals.hpp / 100,
       get_hp_text_color(player.vitals.hpp))
     update_bar(self.player.magic_bar, self.config.player.magic_bar.value, player.vitals.mpp / 100)
-    update_bar(self.player.tp_bar, self.config.player.tp_bar.value, math.min(1000, player.vitals.tp) / 1000)
+    update_bar(self.player.tp_bar, self.config.player.tp_bar.value, math.min(1000, player.vitals.tp) / 1000,
+      self:get_tp_text_color(player.vitals.tp, self.config.player.tp_bar.text))
 
     -- update buffs
     local buffs = status_effects:get_buffs_for_target(player_as_mob.id)
@@ -1260,12 +1276,10 @@ function ui:update_player_frame(player)
   if player.vitals.tp >= 1000 then
     self.player.tp_bar:color(self.config.player.tp_bar.foreground.full_red,
       self.config.player.tp_bar.foreground.full_green,
-      self.config
-      .player.tp_bar.foreground.full_blue)
+      self.config.player.tp_bar.foreground.full_blue)
   else
     self.player.tp_bar:color(self.config.player.tp_bar.foreground.red, self.config.player.tp_bar.foreground.green,
-      self.config
-      .player.tp_bar.foreground.blue)
+      self.config.player.tp_bar.foreground.blue)
   end
 end
 
@@ -1382,7 +1396,8 @@ function ui:update_pet_frame(pet, mpp, tp)
   end
 
   if tp ~= nil then
-    update_bar(self.pet.tp_bar, self.config.pet.tp_bar.value, math.min(1000, tp) / 1000)
+    update_bar(self.pet.tp_bar, self.config.pet.tp_bar.value, math.min(1000, tp) / 1000,
+      self:get_tp_text_color(tp, self.config.pet.tp_bar.text))
     self.pet.tp_bar.last_known_tp = tp
   end
 
@@ -1769,7 +1784,8 @@ function ui:update_party_frame(element, party_member)
       update_bar(element.health_bar, self.config.party.health_bar.value, party_member.hpp / 100,
         get_hp_text_color(party_member.hpp))
       update_bar(element.magic_bar, self.config.party.magic_bar.value, party_member.mpp / 100)
-      update_bar(element.tp_bar, self.config.party.tp_bar.value, math.min(1000, party_member.tp) / 1000)
+      update_bar(element.tp_bar, self.config.party.tp_bar.value, math.min(1000, party_member.tp) / 1000,
+        self:get_tp_text_color(party_member.tp, self.config.party.tp_bar.text))
 
 
       -- update buffs
@@ -1936,7 +1952,8 @@ function ui:update_alliance_frame(element, alliance_member)
       update_bar(element.health_bar, self.config.alliance.health_bar.value, alliance_member.hpp / 100,
         get_hp_text_color(alliance_member.hpp))
       update_bar(element.magic_bar, self.config.alliance.magic_bar.value, alliance_member.mpp / 100)
-      update_bar(element.tp_bar, self.config.alliance.tp_bar.value, math.min(1000, alliance_member.tp) / 1000)
+      update_bar(element.tp_bar, self.config.alliance.tp_bar.value, math.min(1000, alliance_member.tp) / 1000,
+        self:get_tp_text_color(alliance_member.tp, self.config.alliance.tp_bar.text))
 
       -- Adjust bounding box if needed
       if size_changed then

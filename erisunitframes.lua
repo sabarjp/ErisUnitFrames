@@ -86,8 +86,19 @@ windower.register_event('login', function()
   end
 end)
 
+-- unload
 windower.register_event('logout', function()
-  ui:destroy()
+  if isLoaded then
+    isLoaded = false
+    ui:destroy()
+  end
+end)
+
+windower.register_event('unload', function()
+  if isLoaded then
+    isLoaded = false
+    ui:destroy()
+  end
 end)
 
 
@@ -205,6 +216,9 @@ windower.register_event('addon command', function(command, ...)
         local settings = config.load(defaults)
         ui:initialize(settings, theme)
         ui.settings.theme = theme_name
+
+        ui:show()
+
         windower.add_to_chat(8, '---------------------------------------------')
         windower.add_to_chat(8, 'Loaded theme: ' .. theme_name .. '.')
         windower.add_to_chat(8, 'You must save to keep these changes.')
@@ -218,6 +232,8 @@ windower.register_event('addon command', function(command, ...)
     local theme = require('themes/' .. settings.theme)
 
     ui:initialize(settings, theme)
+
+    ui:show()
 
     windower.add_to_chat(8, '---------------------------------------------')
     windower.add_to_chat(8, 'Reset EUF settings to defaults.')

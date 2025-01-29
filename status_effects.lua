@@ -10,6 +10,9 @@ status_effects = {
   -- lookup table for a target id and the last known zone they were in -- a change here will remove their ja buffs
   target_zone = {},
 
+  -- table that stores the highest known songs slots for a bard
+  bard_highest_known_max = {},
+
   -- lookup table for a player name to an id, because their id is lost when the are in a different zone.
   party_player_ids = {},
 
@@ -18,6 +21,16 @@ status_effects = {
 
 function status_effects:initialize()
   self.is_initialized = true
+end
+
+function status_effects:destroy()
+  self.is_initialized = false
+  self.buffs = {}
+  self.current_zone = -1
+  self.target_zone = {}
+  self.bard_highest_known_max = {}
+  self.party_player_ids = {}
+  self.current_tick = 1
 end
 
 function status_effects:get_id_from_player_name(player_name)
@@ -133,7 +146,9 @@ function status_effects:update()
   self.current_tick = self.current_tick + 1
 end
 
-function status_effects:handle_action(data)
+-- This function looks for buff additions and removals in the standard logged actions, such
+-- as from spells, abilities, weaponskills, erase, etc.
+function status_effects:find_buffs_in_action(data)
   -- local message_id = data.targets[1].actions[1].message
 
   local actor_id = data.actor_id
@@ -365,6 +380,410 @@ function status_effects:handle_action(data)
   end
 end
 
+-- This function looks through an action to see if it consumes any existing buffs, such as
+-- divine seal being consumed by a healing spell.
+function status_effects:find_buff_consumptions_in_action(data)
+  local actor_id = data.actor_id
+
+  if data.targets then
+    for _, target in pairs(data.targets) do
+      if target.actions then
+        for _, action in pairs(target.actions) do
+          local message_id = action.message
+
+          --------------------------------------------------------------------------------
+          -- MAGIC SPELL (damage check for sleep removal)
+          --------------------------------------------------------------------------------
+          if message_id == 2                                                       -- cast and deal damage
+              or message_id == 252                                                 -- cast and magic burst
+              or message_id == 265                                                 -- magic burst
+              or message_id == 648                                                 -- cast and damage
+              or message_id == 650                                                 -- cast and magic burst
+          then
+            self:remove_buff_with_priority(target.id, { 2, 19, 69, 70, 71 }, true) -- wake up sleep, remove sneak/invis
+          end
+
+          --------------------------------------------------------------------------------
+          -- MAGIC SPELL
+          --------------------------------------------------------------------------------
+          if message_id == 2            -- cast and deal damage
+              or message_id == 252      -- cast and magic burst
+              or message_id == 230      -- cast and gain status defensive
+              or message_id == 236      -- cast and gain status offensive
+              or message_id == 237      -- cast and gain status generic
+              or message_id == 268      -- cast and magic burst plus status
+              or message_id == 271      -- cast and magic burst plus status_effects
+          then
+            local spell_id = data.param -- data.param will capture ${spell} in original message
+            local spell = res.spells[spell_id]
+
+            local buffs_to_remove = {
+              76, -- hide
+              77, -- camo
+              69, -- invis
+            }
+
+            -- CURES
+            if spell_id == 1 -- Cure 1-6
+                or spell_id == 2
+                or spell_id == 3
+                or spell_id == 4
+                or spell_id == 5
+                or spell_id == 6
+                or spell_id == 7 -- Curaga 1-5
+                or spell_id == 8
+                or spell_id == 9
+                or spell_id == 10
+                or spell_id == 11
+                or spell_id == 93 -- Cura1-2
+                or spell_id == 474
+                or spell_id == 475
+                or spell_id == 893                                       -- Full Cure
+            then
+              table.insert(buffs_to_remove, 78)                          -- divine seal
+
+              self:remove_buff_with_priority(target.id, { 2, 19 }, true) -- wake up sleep
+            end
+
+            -- -NA SPELLS
+            if spell_id == 14
+                or spell_id == 15
+                or spell_id == 16
+                or spell_id == 17
+                or spell_id == 18
+                or spell_id == 19
+                or spell_id == 20
+                or spell_id == 143
+            then
+              table.insert(buffs_to_remove, 78)  -- divine seal
+              table.insert(buffs_to_remove, 453) -- divine caress
+              table.insert(buffs_to_remove, 458) -- divine caress
+            end
+
+            -- Offensive spells
+            if spell.targets['Enemy'] then
+              table.insert(buffs_to_remove, 70) -- sneak
+              table.insert(buffs_to_remove, 71) -- deodorize
+
+              table.insert(buffs_to_remove, 79) -- elemental seal
+
+              -- Offensive Elemental spells
+              if spell.element >= 0 and spell.element <= 7 then
+                table.insert(buffs_to_remove, 598) -- cascade
+                table.insert(buffs_to_remove, 517) -- collimated favor
+              end
+            end
+
+            -- Enfeebles
+            if spell.skill == 35 then
+              table.insert(buffs_to_remove, 494) -- stymie
+            end
+
+            -- Divine spells
+            if spell.skill == 32 then
+              table.insert(buffs_to_remove, 438) -- divine emblem
+            end
+
+            -- Dark spells
+            if spell.skill == 37 then
+              table.insert(buffs_to_remove, 345) -- dark seal
+              table.insert(buffs_to_remove, 439) -- nether void
+            end
+
+            -- Enhancing
+            if spell.skill == 34 then
+              table.insert(buffs_to_remove, 534) -- embolden
+            end
+
+            -- Elemental Ninjutsu
+            if spell.id >= 320 and spell.id <= 337 then
+              table.insert(buffs_to_remove, 441) -- futae
+            end
+
+            -- Geomancy
+            if spell.type == "Geomancy" then
+              table.insert(buffs_to_remove, 569) -- blaze of glory
+            end
+
+            -- Indi-skills
+            if spell.en:sub(1, 4) == "Indi" then
+              table.insert(buffs_to_remove, 584) -- entrust
+            end
+
+            -- Blue Magic
+            if spell.type == "BlueMagic" then
+              if spell.element >= 0 and spell.element <= 7 then
+                table.insert(buffs_to_remove, 165) -- burst affinity
+                table.insert(buffs_to_remove, 355) -- convergence
+                table.insert(buffs_to_remove, 356) -- diffusion
+              else
+                table.insert(buffs_to_remove, 164) -- chain affinity
+                table.insert(buffs_to_remove, 457) -- efflux
+              end
+            end
+
+            -- White Magic
+            if spell.type == "WhiteMagic" then
+              table.insert(buffs_to_remove, 360) -- penury
+              table.insert(buffs_to_remove, 362) -- celerity
+              table.insert(buffs_to_remove, 364) -- rapture
+              table.insert(buffs_to_remove, 412) -- altruism
+              table.insert(buffs_to_remove, 414) -- tranquility
+
+              if spell.skill == 34 then
+                table.insert(buffs_to_remove, 469) -- perpetuance
+              end
+
+              if spell.skill == 33 or spell.skill == 34 then
+                table.insert(buffs_to_remove, 366) -- accession
+              end
+            end
+
+            -- Black Magic
+            if spell.type == "BlackMagic" then
+              table.insert(buffs_to_remove, 361) -- parsimony
+              table.insert(buffs_to_remove, 363) -- alacrity
+              table.insert(buffs_to_remove, 365) -- ebullience
+              table.insert(buffs_to_remove, 413) -- focalization
+              table.insert(buffs_to_remove, 415) -- equaniminty
+
+              if spell.skill == 36 then
+                table.insert(buffs_to_remove, 470) -- immanence
+              end
+
+              if spell.skill == 35 then
+                table.insert(buffs_to_remove, 367) -- manifestation
+              end
+            end
+
+            -- Songs
+            if spell.type == "BardSong" then
+              if spell.targets['Self'] then
+                table.insert(buffs_to_remove, 455) -- tenuto
+                table.insert(buffs_to_remove, 409) -- pianissimo
+              end
+
+              table.insert(buffs_to_remove, 231) -- marcato
+            end
+
+            -- Applies to any spell
+            table.insert(buffs_to_remove, 229) -- manawell
+            table.insert(buffs_to_remove, 230) -- sponteneity
+
+            if buffs_to_remove then
+              self:remove_buff_with_priority(actor_id, buffs_to_remove, true)
+            end
+
+            --------------------------------------------------------------------------------
+            -- JOB ABILITY (DAMAGE)
+            --------------------------------------------------------------------------------
+          elseif message_id == 77  -- sange
+              or message_id == 110 -- ability damage
+              or message_id == 157 -- barrage damage
+              or message_id == 163 -- additional damage
+              or message_id == 229 -- additional damage
+              or message_id == 264 -- straight damage
+              or message_id == 317 -- ability damage
+              or message_id == 413 -- item damage
+              or message_id == 522 -- ability damaage and stun
+
+          then
+            local ability_id = data.param -- data.param will capture ${ability} in original message
+            local buffs_consumed_by_ja = {
+              76,                         -- hide
+              77,                         -- camo
+              69,                         -- invis
+              70,                         -- deodorize
+              71                          -- sneak
+            }
+
+            local ability = res.job_abilities[ability_id]
+
+            if ability then
+              if ability.type == "BloodPactRage" or ability.type == "BloodPactWard" then
+                table.insert(buffs_consumed_by_ja, 583) -- apogee
+              end
+            end
+
+            self:remove_buff_with_priority(actor_id, buffs_consumed_by_ja, true)
+
+            if message_id ~= 188 then
+              self:remove_buff_with_priority(target.id, { 2, 19, 69, 70, 71 }, true) -- wake up sleep, remove sneak/invis
+            end
+
+            --------------------------------------------------------------------------------
+            -- JOB ABILITY (NON_DAMAGE)
+            --------------------------------------------------------------------------------
+          elseif message_id == 100        -- use ability, no target
+              or message_id == 115        -- use ability, enhance self
+              or message_id == 116        -- use ability, enhance self
+              or message_id == 117        -- use ability, enhance self
+              or message_id == 118        -- use ability, enhance self
+              or message_id == 119        -- use ability, on target
+              or message_id == 120        -- use ability, enhance self
+              or message_id == 121        -- use ability, enhance self
+              or message_id == 126        -- use ability, enhance self
+              or message_id == 127        -- use ability, status target
+              or message_id == 131        -- use ability, defend against mob type
+              or message_id == 134        -- use ability, defend against mob type
+              or message_id == 141        -- use ability, status target
+              or message_id == 143        -- use ability, enhance self
+              or message_id == 144        -- use ability, debuff target
+              or message_id == 146        -- use ability, debuff target
+              or message_id == 148        -- use ability, defend against mob type
+              or message_id == 149        -- use ability, defend against mob type
+              or message_id == 150        -- use ability, defend against mob type
+              or message_id == 151        -- use ability, defend against mob type
+              or message_id == 158        -- use ability, miss
+              or message_id == 324        -- use ability, miss
+              or message_id == 303        -- divine seal
+              or message_id == 304        -- ele seal
+              or message_id == 305        -- trick attack
+              or message_id == 420        -- rolls
+              or message_id == 421        -- various ja, i.e. rolls
+          then
+            local ability_id = data.param -- data.param will capture ${ability} in original message
+            local buffs_consumed_by_ja = {
+              76,                         -- hide
+              77,                         -- camo
+              69,                         -- invis
+            }
+
+            local ability = res.job_abilities[ability_id]
+
+            if ability.type == "BloodPactRage" or ability.type == "BloodPactWard" then
+              table.insert(buffs_consumed_by_ja, 583) -- apogee
+            end
+
+            if ability.type == "CorsairRoll" then
+              table.insert(buffs_consumed_by_ja, 357) -- snake eyes
+              table.insert(buffs_consumed_by_ja, 601) -- crooked cards
+            end
+
+            if ability.type == "Step" then
+              table.insert(buffs_consumed_by_ja, 442) -- presto
+            end
+
+            self:remove_buff_with_priority(actor_id, buffs_consumed_by_ja, true)
+
+            if message_id ~= 188 then
+              self:remove_buff_with_priority(target.id, { 2, 19, 69, 70, 71 }, true) -- wake up sleep, remove sneak/invis
+            end
+
+            --------------------------------------------------------------------------------
+            -- WEAPON SKILL
+            --------------------------------------------------------------------------------
+          elseif message_id == 185 -- use weaponskill, target damage
+              or message_id == 186 -- use weaponskill, target status
+              or message_id == 187 -- use weaponskill, drains health
+              or message_id == 188 -- use weaponskill, miss
+              or message_id == 189 -- use weaponskill, no effect
+          then
+            local buffs_consumed_by_ws = {
+              408, -- sekkanoki
+              440, -- sengikori
+              483, -- hagakure
+              45,  -- boost
+              65,  -- sneak attack
+              87,  -- trick attack
+              599, -- consume mana
+              76,  -- hide
+              77,  -- camo
+              69,  -- invis
+              70,  -- deodorize
+              71   -- sneak
+            }
+
+            self:remove_buff_with_priority(actor_id, buffs_consumed_by_ws, true)
+
+            if message_id ~= 188 then
+              self:remove_buff_with_priority(target.id, { 2, 19, 69, 70, 71 }, true) -- wake up sleep, remove sneak/invis
+            end
+
+            --------------------------------------------------------------------------------
+            -- MELEE ATTACK
+            --------------------------------------------------------------------------------
+          elseif message_id == 1  -- melee attack
+              or message_id == 15 -- melee miss
+              or message_id == 63 -- melee miss
+              or message_id == 67 -- melee attack critical
+          then
+            local buffs_consumed_by_attack = {
+              343, -- feint
+              45,  -- boost
+              65,  -- sneak attack
+              87,  -- trick attack
+              599, -- consume mana
+              76,  -- hide
+              77,  -- camo
+              69,  -- invis
+              70,  -- deodorize
+              71   -- sneak
+            }
+
+            self:remove_buff_with_priority(actor_id, buffs_consumed_by_attack, true)
+
+            if message_id ~= 15 and message_id ~= 63 then
+              self:remove_buff_with_priority(target.id, { 2, 19, 69, 70, 71 }, true) -- wake up sleep, remove sneak/invis
+            end
+
+            --------------------------------------------------------------------------------
+            -- RANGED ATTACK
+            --------------------------------------------------------------------------------
+          elseif message_id == 352 -- ranged attack
+              or message_id == 353 -- ranged attack critical
+              or message_id == 354 -- ranged attack miss
+              or message_id == 355 -- ranged attack no effect
+              or message_id == 576 -- ranged attack squarely
+              or message_id == 577 -- ranged attack true
+          then
+            local buffs_consumed_by_attack = {
+              115, -- unlimited shot
+              73,  -- barrage
+              351, -- flashy shot
+              350, -- stealth shot
+              76,  -- hide
+              77,  -- camo
+              69,  -- invis
+              70,  -- deodorize
+              71   -- sneak
+            }
+
+            self:remove_buff_with_priority(actor_id, buffs_consumed_by_attack, true)
+
+            if message_id ~= 354 and message_id ~= 355 then
+              self:remove_buff_with_priority(target.id, { 2, 19, 69, 70, 71 }, true) -- wake up sleep, remove sneak/invis
+            end
+
+            --------------------------------------------------------------------------------
+            -- TAKE DAMAGE, NO EXPLICIT SOURCE
+            --------------------------------------------------------------------------------
+          elseif message_id == 264
+          then
+            self:remove_buff_with_priority(target.id, { 2, 19, 69, 70, 71 }, true) -- wake up sleep, remove sneak/invis
+
+            --------------------------------------------------------------------------------
+            -- RECOVER HEALTH, NO EXPLICIT SOURCE
+            --------------------------------------------------------------------------------
+          elseif message_id == 24
+              or message_id == 26
+              or message_id == 263
+              or message_id == 306
+              or message_id == 267
+          then
+            self:remove_buff_with_priority(target.id, { 2, 19, 69, 70, 71 }, true) -- wake up sleep, remove sneak/invis
+          end
+        end
+      end
+    end
+  end
+end
+
+function status_effects:handle_action(data)
+  self:find_buffs_in_action(data)
+  self:find_buff_consumptions_in_action(data)
+end
+
 -- unhandled actions... for now
 -- 570-572, 757, 792: multi-erase
 -- 319-320, 414, 441, 602: target gain status from ja
@@ -450,6 +869,11 @@ function status_effects:get_max_songs_for_actor(actor_id)
         end
       end
     end
+  end
+
+  -- clarion call 499
+  if self.buffs[actor_id] and self.buffs[actor_id][499] and self.buffs[actor_id][499]['ja:332'] then
+    max_songs = max_songs + 1
   end
 
   return max_songs
@@ -558,15 +982,26 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
 
     -- Bard songs work with the following logic
     --   1. max songs/rolls combined on a target is 12.
-    --   2. max songs on a target from a specific player is either 2 for a main job bard with an instrument equipped, or 1 for eitehr a sub job bard or a main job bard with no instrument.
+    --   2. max songs on a target from a specific player is either 2 for a main job bard with an instrument equipped, or 1 for
+    --      either a sub job bard or a main job bard with no instrument. max songs can increase from instruments or JA buffs.
     --   3. max rolls on a target from a specific player is eitehr 2 for a main job corsair or 1 for a sub job corsair.
-    --   4. when a new song is sung and the specific bard has used up its slots, then if the new song is the same as an existing song, just update the existing song duration, but if its a new song, replace the song with the lowest duration.
-    --      however, if a new song is sung and the target has used its 12 combined song/roll slots, the the oldest one is replaced unless a song is being "refreshed" in duration
+    --   4. when a new song is sung AND the singing bard has used up its slots, then:
+    --        a. if the new song is the same as an existing song, just update the existing song duration
+    --        b. but if its a new song, replace the song with the lowest duration.
+    --      however, if a new song is sung and the target has used its 12 combined song/roll slots, then the oldest one is replaced
+    --      unless a song is being "refreshed" in duration.
+    --
+    --   In addition, the following should be considered.
+    --    The JA Clarion Call increases the song slots by 1 for the singing bard while active.
+    --    Tenuto allows the bard to stack five more songs on itself.
+    --
     if type == 'BardSong' then
       local bard_id = actor_id
-      local target_buffs = self.buffs[target_id]
+      local target_buffs = self.buffs[target_id] or {}
 
       -- Count songs/rolls
+      local current_gear_max = self:get_max_songs_for_actor(bard_id)
+      local known_max = self.bard_highest_known_max[bard_id] or 0
       local total_songs_rolls = 0
       local bard_songs = {}
 
@@ -574,59 +1009,69 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
         for c_id, buff in pairs(spell_table) do
           if buff.type == 'BardSong' or buff.type == 'CorsairRoll' then
             total_songs_rolls = total_songs_rolls + 1
-            if buff.actor_id == bard_id and buff.type == 'BardSong' then
-              table.insert(bard_songs, { buff_id = b_id, composite_id = c_id, duration = buff.end_time - os.clock() })
+            if buff.type == 'BardSong' and buff.actor_id == bard_id then
+              table.insert(bard_songs, {
+                buff_id = b_id,
+                composite_id = c_id,
+                duration = buff.end_time - os.clock()
+              })
             end
           end
         end
       end
 
-      -- Determine max songs allowed for this bard
-      local max_songs = self:get_max_songs_for_actor(actor_id)
-
-      -- Check if the song already exists and can just be refreshed
-      for _, song in ipairs(bard_songs) do
-        if song.buff_id == buff_id and song.composite_id == composite_key then
-          -- Refresh the duration
+      -- 1) If we’re just refreshing an existing song, do that and return.
+      for _, s in ipairs(bard_songs) do
+        if s.buff_id == buff_id and s.composite_id == composite_key then
           self.buffs[target_id][buff_id][composite_key].end_time = os.clock() + duration
-          return -- Stop here since we just refreshed
+          return
         end
       end
 
-      -- If bard has reached max songs
-      if #bard_songs >= max_songs then
-        -- Find the shortest duration song
+      local active_songs_count = #bard_songs
+
+      -- 2) Update or revert known_max if needed:
+      --    (a) If the current gear max is higher, raise known_max.
+      if current_gear_max > known_max then
+        known_max = current_gear_max
+      else
+        -- (b) If active songs have fallen below known_max AND our gear max is lower,
+        --     that means we lost that “extra” slot in practice, so revert known_max.
+        if active_songs_count < known_max and current_gear_max < known_max then
+          known_max = current_gear_max
+        end
+      end
+
+      self.bard_highest_known_max[bard_id] = known_max
+
+      -- 3) Now enforce the “effective” (known) max if we’re adding a new song.
+      if active_songs_count >= known_max then
+        -- Remove the shortest song from this bard
         table.sort(bard_songs, function(a, b) return a.duration < b.duration end)
-        local shortest_song = bard_songs[1]
-        self.buffs[target_id][shortest_song.buff_id][shortest_song.composite_id] = nil -- Replace it
-
-        -- Clean up if the spell table is empty
-        if next(self.buffs[target_id][shortest_song.buff_id]) == nil then
-          self.buffs[target_id][shortest_song.buff_id] = nil
+        local shortest = bard_songs[1]
+        self.buffs[target_id][shortest.buff_id][shortest.composite_id] = nil
+        if next(self.buffs[target_id][shortest.buff_id]) == nil then
+          self.buffs[target_id][shortest.buff_id] = nil
         end
       end
 
-      -- If target has exceeded total song/roll limit
+      -- 4) Enforce total combined limit
       if total_songs_rolls >= 12 then
-        -- Find the oldest song/roll
-        local oldest_buff = nil
-        local oldest_time = math.huge
+        -- Remove the oldest overall
+        local oldest_buff, oldest_time
+        oldest_time = math.huge
 
         for b_id, spell_table in pairs(target_buffs) do
           for c_id, buff in pairs(spell_table) do
-            if buff.type == 'BardSong' or buff.type == 'CorsairRoll' then
-              if buff.end_time < oldest_time then
-                oldest_buff = { buff_id = b_id, composite_key = c_id }
-                oldest_time = buff.end_time
-              end
+            if (buff.type == 'BardSong' or buff.type == 'CorsairRoll') and buff.end_time < oldest_time then
+              oldest_time = buff.end_time
+              oldest_buff = { buff_id = b_id, composite_key = c_id }
             end
           end
         end
 
         if oldest_buff then
-          self.buffs[target_id][oldest_buff.buff_id][oldest_buff.composite_key] = nil -- Remove the oldest
-
-          -- Clean up if the spell table is empty
+          self.buffs[target_id][oldest_buff.buff_id][oldest_buff.composite_key] = nil
           if next(self.buffs[target_id][oldest_buff.buff_id]) == nil then
             self.buffs[target_id][oldest_buff.buff_id] = nil
           end
@@ -943,51 +1388,53 @@ function status_effects:remove_buff(target_id, buff_id, composite_key)
   self:update_target_zone(target_id, self.current_zone)
 end
 
--- either removes all buffs matching an id, or only the oldest
-function status_effects:remove_buff_with_priority(target_id, buff_id, remove_all)
+function status_effects:remove_buff_with_priority(target_id, buff_id_or_list, remove_all)
   if not self.buffs[target_id] then
     return
   end
 
-  if not buff_id then
-    -- If no buff_id is provided, remove all buffs for the target
+  -- If no buff id(s) provided, remove all buffs
+  if not buff_id_or_list then
     self.buffs[target_id] = nil
-  elseif remove_all then
-    -- If remove_all is true, remove all buffs of the given buff_id
-    if self.buffs[target_id][buff_id] then
-      self.buffs[target_id][buff_id] = nil
-    end
   else
-    -- Remove only the "oldest" buff (based on the smallest end_time)
-    if self.buffs[target_id][buff_id] then
-      local oldest_composite_key, oldest_end_time = nil, math.huge
+    -- Ensure we have a table of buff IDs, even if just one
+    local buff_ids = type(buff_id_or_list) == "table" and buff_id_or_list or { buff_id_or_list }
 
-      -- Find the buff with the smallest end_time
-      for composite_key, buff_data in pairs(self.buffs[target_id][buff_id]) do
-        if buff_data.end_time < oldest_end_time then
-          oldest_composite_key = composite_key
-          oldest_end_time = buff_data.end_time
+    -- Process each buff ID in the table
+    for _, buff_id in ipairs(buff_ids) do
+      if remove_all then
+        -- Remove all buffs of buff_id
+        if self.buffs[target_id][buff_id] then
+          self.buffs[target_id][buff_id] = nil
         end
-      end
+      else
+        -- Remove only the "oldest" buff for buff_id
+        if self.buffs[target_id][buff_id] then
+          local oldest_composite_key, oldest_end_time = nil, math.huge
 
-      -- Remove the oldest buff if found
-      if oldest_composite_key then
-        self.buffs[target_id][buff_id][oldest_composite_key] = nil
-      end
+          for composite_key, buff_data in pairs(self.buffs[target_id][buff_id]) do
+            if buff_data.end_time < oldest_end_time then
+              oldest_composite_key = composite_key
+              oldest_end_time = buff_data.end_time
+            end
+          end
 
-      -- Clean up buff_id entry if it's empty
-      if next(self.buffs[target_id][buff_id]) == nil then
-        self.buffs[target_id][buff_id] = nil
+          if oldest_composite_key then
+            self.buffs[target_id][buff_id][oldest_composite_key] = nil
+          end
+
+          if next(self.buffs[target_id][buff_id]) == nil then
+            self.buffs[target_id][buff_id] = nil
+          end
+        end
       end
     end
   end
 
-  -- Clean up target entry if it's empty
   if self.buffs[target_id] and next(self.buffs[target_id]) == nil then
     self.buffs[target_id] = nil
   end
 
-  -- update target last known zone
   self:update_target_zone(target_id, self.current_zone)
 end
 

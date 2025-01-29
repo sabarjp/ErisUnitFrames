@@ -1,5 +1,7 @@
 local grouper = {}
 
+grouper.groups_waiting_for_bb = {} -- Holds groups waiting for BB updates
+
 -- helper to get components in
 function grouper.flatten(t)
   local result = {}
@@ -101,13 +103,7 @@ function grouper.create_component_group(root, components, related, parent)
     self.bounding_box.max_y = nil
   end
 
-  -- Function to calculate bounding box dynamically
-  function group:calculate_bounding_box(withDelay)
-    -- delay is needed if text was recently updated
-    if withDelay then
-      coroutine.sleep(withDelay)
-    end
-
+  function group:perform_bounding_box_calculation()
     if self.bounding_box == nil then
       -- object was destroyed while waiting, do nothing
       return
@@ -155,9 +151,18 @@ function grouper.create_component_group(root, components, related, parent)
         self.bounding_box.max_y = comp_max_y
       end
     end
+  end
 
-    if self.parent then
-      self.parent:calculate_bounding_box(0.1)
+  -- Function to calculate bounding box dynamically
+  function group:calculate_bounding_box(withDelay)
+    if not self.bb_pending then
+      self.bb_pending = true
+      self.bb_frames_remaining = withDelay or 5
+      grouper.groups_waiting_for_bb[self] = true
+
+      if self.parent then
+        self.parent:calculate_bounding_box(self.bb_frames_remaining + 3)
+      end
     end
   end
 
@@ -175,5 +180,17 @@ function grouper.create_component_group(root, components, related, parent)
   group:calculate_bounding_box()
   return group
 end
+
+windower.register_event('prerender', function()
+  for grp in pairs(grouper.groups_waiting_for_bb) do
+    grp.bb_frames_remaining = grp.bb_frames_remaining - 1
+
+    if grp.bb_frames_remaining <= 0 then
+      grp.bb_pending = false
+      grouper.groups_waiting_for_bb[grp] = nil -- Remove from active list
+      grp:perform_bounding_box_calculation()
+    end
+  end
+end)
 
 return grouper

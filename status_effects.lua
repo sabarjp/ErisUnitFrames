@@ -17,6 +17,9 @@ status_effects = {
   party_player_ids = {},
 
   current_tick = 1,
+
+  -- incrementing unique identifier used by some buffs to make them unique in the composite key
+  current_buff_id = 1
 }
 
 function status_effects:initialize()
@@ -31,6 +34,7 @@ function status_effects:destroy()
   self.bard_highest_known_max = {}
   self.party_player_ids = {}
   self.current_tick = 1
+  self.current_buff_id = 1
 end
 
 function status_effects:get_id_from_player_name(player_name)
@@ -289,7 +293,41 @@ function status_effects:find_buffs_in_action(data)
             -- PUPPET OVERLOAD
             --------------------------------------------------------------------------------
           elseif message_id == 799 then
-            self:add_buff_pup(target.id, nil, 299)
+            self:add_buff_pup(target.id, 299)
+
+
+            --------------------------------------------------------------------------------
+            -- PUPPET MANEUVER
+            --------------------------------------------------------------------------------
+          elseif message_id == 798 then
+            source = 'ABILITY'
+            local ability_id = data.param -- data.param will capture ${ability} in original message
+            local type = res.job_abilities[ability_id].type
+            local buff_id
+
+            if ability_id == 141 then
+              buff_id = 300
+            elseif ability_id == 141 then
+              buff_id = 300
+            elseif ability_id == 142 then
+              buff_id = 301
+            elseif ability_id == 143 then
+              buff_id = 302
+            elseif ability_id == 144 then
+              buff_id = 303
+            elseif ability_id == 145 then
+              buff_id = 304
+            elseif ability_id == 146 then
+              buff_id = 305
+            elseif ability_id == 147 then
+              buff_id = 306
+            elseif ability_id == 148 then
+              buff_id = 307
+            end
+
+            if buff_id then
+              self:add_buff(target.id, source, ability_id, buff_id, type, actor_id)
+            end
 
             --------------------------------------------------------------------------------
             -- MAGIC REMOVE BUFF
@@ -916,10 +954,10 @@ function status_effects:add_buff(target_id, source_type, source_id, buff_id, typ
   self:update_target_zone(target_id, self.current_zone)
 end
 
-function status_effects:get_known_duration(spell_id)
-  if spell_id == 112 then
+function status_effects:get_known_spell_duration(spell_id)
+  if spell_id == 112 then     -- flash
     return 6
-  elseif spell_id == 136 then
+  elseif spell_id == 136 then -- invis/sneak/deodorize
     return 600
   elseif spell_id == 137 then
     return 600
@@ -928,9 +966,15 @@ function status_effects:get_known_duration(spell_id)
   end
 end
 
+function status_effects:get_known_ability_duration(ability_id)
+  if ability_id >= 141 and ability_id <= 148 then -- manuevers
+    return 60
+  end
+end
+
 function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id)
   local spell = res.spells[spell_id]
-  local duration = spell.duration or self:get_known_duration(spell_id) or 60
+  local duration = spell.duration or self:get_known_spell_duration(spell_id) or 60
 
   if spell then
     -- Prepare composite key
@@ -1139,6 +1183,7 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
       type = type,
       category = buff_types[buff_id] or "",
     }
+    self.current_buff_id = self.current_buff_id + 1
   end
 end
 
@@ -1182,12 +1227,15 @@ function status_effects:add_buff_ws(target_id, ability_id, buff_id, type, actor_
       type = type,
       category = buff_types[buff_id] or ""
     }
+    self.current_buff_id = self.current_buff_id + 1
   end
 end
 
 function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_id)
   local ability = res.job_abilities[ability_id]
-  if ability and ability.duration then
+  local duration = ability.duration or self:get_known_ability_duration(ability_id)
+
+  if ability and duration then
     -- Prepare composite key
     local composite_key = 'ja:' .. ability_id
 
@@ -1206,7 +1254,6 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
         self:remove_buff_given_by_id(target_id, 'ja:' .. overwritten_id)
       end
     end
-
 
     -- Corsair rolls logic
     if type == 'CorsairRoll' then
@@ -1281,6 +1328,42 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
       end
     end
 
+    -- Puppet maneuver logic
+    if type == 'PetCommand' and ability.id >= 141 and ability.id <= 148 then
+      type = 'Maneuver' -- rename type
+
+      local puppet_id = actor_id
+      local target_buffs = self.buffs[target_id]
+
+      -- Count manuevers
+      local puppet_manus = {}
+
+      for b_id, spell_table in pairs(target_buffs) do
+        for c_id, buff in pairs(spell_table) do
+          if buff.type == 'Maneuver' then
+            if buff.actor_id == puppet_id and buff.type == 'Maneuver' then
+              table.insert(puppet_manus, { buff_id = b_id, composite_key = c_id, duration = buff.end_time - os.clock() })
+            end
+          end
+        end
+      end
+
+      -- add unique composite key portion
+      composite_key = composite_key .. ":" .. self.current_buff_id
+
+      -- If Puppet has reached max manus
+      if #puppet_manus >= 3 then
+        -- Find the shortest duration manu
+        table.sort(puppet_manus, function(a, b) return a.duration < b.duration end)
+        local shortest_manu = puppet_manus[1]
+        self.buffs[target_id][shortest_manu.buff_id][shortest_manu.composite_key] = nil -- Replace it
+
+        -- Clean up if the spell table is empty
+        if next(self.buffs[target_id][shortest_manu.buff_id]) == nil then
+          self.buffs[target_id][shortest_manu.buff_id] = nil
+        end
+      end
+    end
 
     -- Ensure the table structure exists
     if not self.buffs[target_id] then
@@ -1293,7 +1376,7 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
     -- Add the new buff
     self.buffs[target_id][buff_id][composite_key] = {
       buff_id = buff_id,
-      end_time = os.clock() + ability.duration,
+      end_time = os.clock() + duration,
       originating_spell = ability.en,
       originating_id = composite_key,
       actor_id = actor_id,
@@ -1301,39 +1384,38 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
       type = type,
       category = buff_types[buff_id] or ""
     }
+    self.current_buff_id = self.current_buff_id + 1
   end
 end
 
-function status_effects:add_buff_pup(target_id, ability_id, buff_id)
-  if ability_id == nil then
-    -- Prepare composite key
-    local composite_key = 'ja:' .. ability_id
+function status_effects:add_buff_pup(target_id, buff_id)
+  -- Prepare composite key
+  local composite_key = 'ja:-1'
 
-    -- overloaded status
-    -- remove all maneuvers
-    for _, overwritten_id in pairs({ 141, 142, 143, 144, 145, 146, 147, 148 }) do
-      self:remove_buff_given_by_id(target_id, 'ja:' .. overwritten_id)
-    end
-
-    -- add overloaded
-    if not self.buffs[target_id] then
-      self.buffs[target_id] = {}
-    end
-    if not self.buffs[target_id][buff_id][0] then
-      self.buffs[target_id][buff_id] = {}
-    end
-
-    self.buffs[target_id][buff_id][composite_key] = {
-      buff_id = buff_id,
-      end_time = os.clock() + 60,
-      originating_spell = 'Maneuver',
-      originating_id = composite_key,
-      actor_id = target_id,
-      target_id = target_id,
-      type = 'Maneuver',
-      category = buff_types[buff_id] or ""
-    }
+  -- overloaded status
+  -- remove all maneuvers
+  for _, maneuver_buff_id in pairs({ 300, 301, 302, 303, 304, 305, 306, 307 }) do
+    self:remove_buff_with_priority(target_id, maneuver_buff_id, true)
   end
+
+  -- add overloaded
+  if not self.buffs[target_id] then
+    self.buffs[target_id] = {}
+  end
+  if not self.buffs[target_id][buff_id] then
+    self.buffs[target_id][buff_id] = {}
+  end
+
+  self.buffs[target_id][buff_id][composite_key] = {
+    buff_id = buff_id,
+    end_time = os.clock() + 60,
+    originating_spell = 'Maneuver',
+    originating_id = composite_key,
+    actor_id = target_id,
+    target_id = target_id,
+    type = 'Overload',
+    category = buff_types[buff_id] or ""
+  }
 end
 
 function status_effects:remove_buff_given_by_id(target_id, composite_id)

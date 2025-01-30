@@ -53,15 +53,21 @@ euf_debug = false
 local isLoaded = false
 
 local function initialize()
-  --  load up settings
-  local settings = config.load(defaults)
-  local success, theme = pcall(require, 'themes/' .. settings.theme)
-  if not success then
-    windower.add_to_chat(8, 'EUF Failed to find: themes/' .. settings.theme .. '.lua')
+  local windower_player = windower.ffxi.get_player()
+  if windower_player ~= nil then
+    --  load up settings
+    local settings = config.load(defaults)
+    local success, theme = pcall(require, 'themes/' .. settings.theme)
+    if not success then
+      windower.add_to_chat(8, 'EUF Failed to find: themes/' .. settings.theme .. '.lua')
+    else
+      config.save(settings)
+      euf_debug = settings.debugMode
+      ui:initialize(settings, theme)
+    end
   else
-    config.save(settings)
-    euf_debug = settings.debugMode
-    ui:initialize(settings, theme)
+    coroutine.sleep(2)
+    initialize()
   end
 end
 
@@ -243,6 +249,7 @@ windower.register_event('addon command', function(command, ...)
     windower.add_to_chat(8, 'Reloading EUF...')
     ui:destroy()
     initialize()
+    ui:show()
     windower.add_to_chat(8, 'Reload complete.')
   end
 end)

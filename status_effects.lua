@@ -445,6 +445,7 @@ function status_effects:find_buff_consumptions_in_action(data)
           -- MAGIC SPELL
           --------------------------------------------------------------------------------
           if message_id == 2            -- cast and deal damage
+              or message_id == 7        -- cast and recover hp
               or message_id == 252      -- cast and magic burst
               or message_id == 230      -- cast and gain status defensive
               or message_id == 236      -- cast and gain status offensive

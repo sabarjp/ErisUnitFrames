@@ -175,7 +175,7 @@ theme.player = {
   },
   buffs = {
     height = 32,
-    width = 120,
+    width = 130,
     buff_height = 16,
     buff_width = 16,
     rel_pos = {
@@ -456,7 +456,7 @@ theme.target = {
   },
   buffs = {
     height = 32,
-    width = 120,
+    width = 130,
     buff_height = 16,
     buff_width = 16,
     rel_pos = {
@@ -729,8 +729,8 @@ theme.party = {
     }
   },
   buffs = {
-    height = 32,
-    width = 110,
+    height = 16,
+    width = 200,
     buff_height = 16,
     buff_width = 16,
     rel_pos = {

@@ -16,14 +16,20 @@ status_effects = {
   -- lookup table for a player name to an id, because their id is lost when the are in a different zone.
   party_player_ids = {},
 
+  -- lookup table for a player id, to quickly check for party membership
+  party_players = {},
+
   current_tick = 1,
 
   -- incrementing unique identifier used by some buffs to make them unique in the composite key
-  current_buff_id = 1
+  current_buff_id = 1,
+
+  current_player_id = -1
 }
 
 function status_effects:initialize()
   self.is_initialized = true
+  self.current_player_id = windower.ffxi.get_player().id
 end
 
 function status_effects:destroy()
@@ -33,8 +39,10 @@ function status_effects:destroy()
   self.target_zone = {}
   self.bard_highest_known_max = {}
   self.party_player_ids = {}
+  self.party_players = {}
   self.current_tick = 1
   self.current_buff_id = 1
+  self.current_player_id = -1
 end
 
 function status_effects:get_id_from_player_name(player_name)
@@ -99,16 +107,18 @@ function status_effects:update()
   for target_id, target_buffs in pairs(self.buffs) do
     for buff_id, spell_table in pairs(target_buffs) do
       for composite_key, buff in pairs(spell_table) do
-        -- Update remaining time
-        buff.remaining_time = buff.end_time - os.clock()
+        if buff.definitive == false then
+          -- Update remaining time
+          buff.remaining_time = buff.end_time - os.clock()
 
-        -- Remove expired buffs
-        if buff.remaining_time <= 0 then
-          spell_table[composite_key] = nil -- Remove this specific spell_id entry
+          -- Remove expired buffs
+          if buff.remaining_time <= 0 then
+            spell_table[composite_key] = nil -- Remove this specific spell_id entry
 
-          -- Clean up empty buff_id entry
-          if next(spell_table) == nil then
-            target_buffs[buff_id] = nil
+            -- Clean up empty buff_id entry
+            if next(spell_table) == nil then
+              target_buffs[buff_id] = nil
+            end
           end
         end
       end
@@ -121,11 +131,15 @@ function status_effects:update()
   end
 
   -- check party / alliance zones every few seconds to keep them up-to-date and
-  -- purge buffs that fall off across zones
+  -- to help purge buffs that fall off across zones
 
   if self.current_tick % 120 then
-    if self.current_tick % 120000 then
-      -- reset the list once an hour or so
+    if self.current_tick % 1200 then
+      self.party_players = {}
+    end
+
+    if self.current_tick % 120001 then
+      -- rebuild the lookup list once in a while
       self.party_player_ids = {}
     end
 
@@ -135,9 +149,14 @@ function status_effects:update()
       do
         local party_member = party[key]
         if party_member ~= nil then
-          -- update id mapping
+          -- update id mapping if available
           if party_member.mob then
             self.party_player_ids[party_member.name] = party_member.mob.id
+          end
+
+          local party_id = self.party_player_ids[party_member.name]
+          if party_id then
+            self.party_players[party_id] = true
           end
 
           -- update zone
@@ -145,6 +164,8 @@ function status_effects:update()
         end
       end
     end
+
+    self.party_players[self.current_player_id] = true
   end
 
   self.current_tick = self.current_tick + 1
@@ -161,6 +182,10 @@ function status_effects:find_buffs_in_action(data)
     local source = 'UNKNOWN' -- UNKNOWN, MAGIC, ABILITY, WEASPONSKILL
 
     for _, target in pairs(data.targets) do
+      if self.party_players[target.id] then
+        return -- do not parse if definitive data will exist
+      end
+
       if target.actions then
         for _, action in pairs(target.actions) do
           local message_id = action.message
@@ -191,7 +216,7 @@ function status_effects:find_buffs_in_action(data)
 
             if buff_id then
               --print('gain via action -- ' .. target.id .. ' <- ' .. buff_id .. ' from ' .. spell_id)
-              self:add_buff(target.id, source, spell_id, buff_id, type, actor_id)
+              self:add_parsed_buff(target.id, source, spell_id, buff_id, type, actor_id)
             end
 
             --------------------------------------------------------------------------------
@@ -230,7 +255,7 @@ function status_effects:find_buffs_in_action(data)
 
             if buff_id then
               --print('gain via action -- ' .. buff_id .. ' -> ' .. target_id)
-              self:add_buff(target.id, source, ability_id, buff_id, type, actor_id)
+              self:add_parsed_buff(target.id, source, ability_id, buff_id, type, actor_id)
             end
 
             --------------------------------------------------------------------------------
@@ -262,7 +287,7 @@ function status_effects:find_buffs_in_action(data)
                   local target_id = target.id
                   --print('ws gain via lookup action ' ..
                   --  message_id .. ': ' .. ability_id .. '-- ' .. single_buff_id .. ' -> ' .. target_id)
-                  self:add_buff(target_id, source, ability_id, single_buff_id, type, actor_id)
+                  self:add_parsed_buff(target_id, source, ability_id, single_buff_id, type, actor_id)
                 end
               end
             else
@@ -272,7 +297,7 @@ function status_effects:find_buffs_in_action(data)
               if buff_id_parsed and buff_id_parsed ~= 0 then
                 --print('ws explicit gain via action ' ..
                 --  message_id .. ': ' .. ability_id .. '-- ' .. buff_id_parsed .. ' -> ' .. target_id)
-                self:add_buff(target_id, source, ability_id, buff_id_parsed, type, actor_id)
+                self:add_parsed_buff(target_id, source, ability_id, buff_id_parsed, type, actor_id)
               end
             end
 
@@ -293,7 +318,7 @@ function status_effects:find_buffs_in_action(data)
             -- PUPPET OVERLOAD
             --------------------------------------------------------------------------------
           elseif message_id == 799 then
-            self:add_buff_pup(target.id, 299)
+            self:add_parsed_buff_pup(target.id, 299)
 
 
             --------------------------------------------------------------------------------
@@ -326,7 +351,7 @@ function status_effects:find_buffs_in_action(data)
             end
 
             if buff_id then
-              self:add_buff(target.id, source, ability_id, buff_id, type, actor_id)
+              self:add_parsed_buff(target.id, source, ability_id, buff_id, type, actor_id)
             end
 
             --------------------------------------------------------------------------------
@@ -374,7 +399,7 @@ function status_effects:find_buffs_in_action(data)
               if buff_id_lookup then
                 for _, single_buff_id in pairs(buff_id_lookup) do
                   local target_id = target.id
-                  self:add_buff(target_id, source, source_id, single_buff_id, type, actor_id)
+                  self:add_parsed_buff(target_id, source, source_id, single_buff_id, type, actor_id)
                 end
               end
             end
@@ -400,7 +425,7 @@ function status_effects:find_buffs_in_action(data)
 
             if buff_id then
               --print('gain via action -- ' .. buff_id .. ' -> ' .. target_id)
-              self:add_buff(target.id, source, source_id, buff_id, type, actor_id)
+              self:add_parsed_buff(target.id, source, source_id, buff_id, type, actor_id)
             end
 
             --------------------------------------------------------------------------------
@@ -425,6 +450,10 @@ function status_effects:find_buff_consumptions_in_action(data)
 
   if data.targets then
     for _, target in pairs(data.targets) do
+      if self.party_players[target.id] then
+        return -- do not parse if definitive data will exist
+      end
+
       if target.actions then
         for _, action in pairs(target.actions) do
           local message_id = action.message
@@ -836,6 +865,10 @@ end
 function status_effects:handle_action_message(data)
   --print('action_message=' .. data.message_id)
 
+  if self.party_players[data.target_id] then
+    return -- do not parse if definitive data will exist
+  end
+
   if data.message_id == 6       -- x defeats target
       or data.message_id == 20  -- target falls to the ground
       or data.message_id == 113 -- target falls to the ground after ma
@@ -843,7 +876,6 @@ function status_effects:handle_action_message(data)
       or data.message_id == 605 -- target falls to the ground after additional effect
       or data.message_id == 646 -- target falls to the ground after ja
   then
-    debug_print('death detected for ' .. data.target_id)
     self:remove_buff(data.target_id)
   elseif data.message_id == 203 -- gains status
       or data.message_id == 205 -- gains status
@@ -942,13 +974,13 @@ function status_effects:get_max_rolls_for_actor(actor_id)
   return max_rolls
 end
 
-function status_effects:add_buff(target_id, source_type, source_id, buff_id, type, actor_id)
+function status_effects:add_parsed_buff(target_id, source_type, source_id, buff_id, type, actor_id)
   if source_type == 'MAGIC' then
-    self:add_buff_ma(target_id, source_id, buff_id, type, actor_id)
+    self:add_parsed_buff_ma(target_id, source_id, buff_id, type, actor_id)
   elseif source_type == 'ABILITY' then
-    self:add_buff_ja(target_id, source_id, buff_id, type, actor_id)
+    self:add_parsed_buff_ja(target_id, source_id, buff_id, type, actor_id)
   elseif source_type == 'WEAPONSKILL' then
-    self:add_buff_ws(target_id, source_id, buff_id, type, actor_id)
+    self:add_parsed_buff_ws(target_id, source_id, buff_id, type, actor_id)
   end
 
   -- update target last known zone
@@ -973,7 +1005,7 @@ function status_effects:get_known_ability_duration(ability_id)
   end
 end
 
-function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id)
+function status_effects:add_parsed_buff_ma(target_id, spell_id, buff_id, type, actor_id)
   local spell = res.spells[spell_id]
   local duration = spell.duration or self:get_known_spell_duration(spell_id) or 60
 
@@ -1175,6 +1207,7 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
 
     -- Add the new buff
     self.buffs[target_id][buff_id][composite_key] = {
+      definitive = false,
       buff_id = buff_id,
       end_time = os.clock() + duration,
       originating_spell = spell.en,
@@ -1188,7 +1221,7 @@ function status_effects:add_buff_ma(target_id, spell_id, buff_id, type, actor_id
   end
 end
 
-function status_effects:add_buff_ws(target_id, ability_id, buff_id, type, actor_id)
+function status_effects:add_parsed_buff_ws(target_id, ability_id, buff_id, type, actor_id)
   local ability = monster_abilities[ability_id]
   -- if ability then
   --   local target = windower.ffxi.get_mob_by_id(target_id)
@@ -1219,6 +1252,7 @@ function status_effects:add_buff_ws(target_id, ability_id, buff_id, type, actor_
 
     -- Add the new buff
     self.buffs[target_id][buff_id][composite_key] = {
+      definitive = false,
       buff_id = buff_id,
       end_time = os.clock() + ability.duration,
       originating_spell = ability.en,
@@ -1232,7 +1266,7 @@ function status_effects:add_buff_ws(target_id, ability_id, buff_id, type, actor_
   end
 end
 
-function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_id)
+function status_effects:add_parsed_buff_ja(target_id, ability_id, buff_id, type, actor_id)
   local ability = res.job_abilities[ability_id]
   local duration = ability.duration or self:get_known_ability_duration(ability_id)
 
@@ -1376,6 +1410,7 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
 
     -- Add the new buff
     self.buffs[target_id][buff_id][composite_key] = {
+      definitive = false,
       buff_id = buff_id,
       end_time = os.clock() + duration,
       originating_spell = ability.en,
@@ -1389,7 +1424,7 @@ function status_effects:add_buff_ja(target_id, ability_id, buff_id, type, actor_
   end
 end
 
-function status_effects:add_buff_pup(target_id, buff_id)
+function status_effects:add_parsed_buff_pup(target_id, buff_id)
   -- Prepare composite key
   local composite_key = 'ja:-1'
 
@@ -1408,6 +1443,7 @@ function status_effects:add_buff_pup(target_id, buff_id)
   end
 
   self.buffs[target_id][buff_id][composite_key] = {
+    definitive = false,
     buff_id = buff_id,
     end_time = os.clock() + 60,
     originating_spell = 'Maneuver',
@@ -1521,12 +1557,39 @@ function status_effects:remove_buff_with_priority(target_id, buff_id_or_list, re
   self:update_target_zone(target_id, self.current_zone)
 end
 
+function status_effects:add_buffs_raw(target_id, buffs)
+  -- Always reset or initialize the target_id structure
+  self.buffs[target_id] = {}
+
+  for index, buff_id in ipairs(buffs) do
+    local composite_key = 'def:-1'
+
+
+    -- Always reset or initialize the buff_id substructure
+    self.buffs[target_id][buff_id] = {}
+
+    -- Add the new buff
+    self.buffs[target_id][buff_id][composite_key] = {
+      definitive = true,
+      buff_id = buff_id,
+      end_time = os.clock() + 99999 - (index * 100),
+      originating_spell = 'Unknown',
+      originating_id = composite_key,
+      actor_id = -1,
+      target_id = target_id,
+      type = type,
+      category = buff_types[buff_id] or "",
+    }
+    self.current_buff_id = self.current_buff_id + 1
+  end
+end
+
 -- this removes every buff from everyone other than the player and the party, used
 -- when zoning to reset the buff table since we don't know what is happening after
 -- we zone out
 function status_effects:remove_all_non_party_buffs()
   -- Fetch the current player ID
-  local player_id = windower.ffxi.get_player().id
+  local player_id = self.current_player_id
 
   -- Prepare a set of allowed IDs for quick lookup
   local allowed_ids = {}
@@ -1572,6 +1635,7 @@ function status_effects:get_buffs_for_target(target_id)
       local composite_key2 = buff_id .. ':' .. composite_key1
 
       composite_buffs[composite_key2] = {
+        definitive = buff.definitive,
         buff_id = buff_id,
         spell_id = key_id, -- need to split spell id out
         end_time = buff.end_time,
@@ -1588,9 +1652,15 @@ function status_effects:get_buffs_for_target(target_id)
   return composite_buffs
 end
 
+local remove_tick_target = 0
+
 windower.register_event('prerender', function()
   if status_effects.is_initialized then
     status_effects:update()
+
+    if status_effects.current_tick == remove_tick_target then
+      status_effects:remove_all_non_party_buffs()
+    end
   end
 end)
 
@@ -1599,7 +1669,8 @@ windower.register_event('incoming chunk', function(id, original, modified, injec
     local info = windower.ffxi.get_info()
     status_effects.current_zone = (info.mog_house and -1) or windower.ffxi.get_info().zone
     status_effects:update_target_zone(windower.ffxi.get_player().id, status_effects.current_zone)
-    status_effects:remove_all_non_party_buffs()
+    -- need to delay removing all buffs
+    remove_tick_target = status_effects.current_tick + 30
   end
 end)
 
@@ -1624,6 +1695,102 @@ windower.register_event('incoming chunk', function(id, data)
     end
   end
 end)
+
+-- Debugging to discover packet structure
+local function hex_dump(data)
+  local bytes_per_row = 16
+  local hex_str = ""
+
+  for i = 1, #data do
+    -- Print the byte as a 2-digit hex value
+    local byte = string.byte(data, i)
+    hex_str = hex_str .. string.format("%02X ", byte)
+
+    -- Add spacing between groups of 8 bytes for readability
+    if i % 8 == 0 then
+      hex_str = hex_str .. " "
+    end
+
+    -- New line after every row
+    if i % bytes_per_row == 0 then
+      windower.add_to_chat(8, string.format("%04X  %s", i - bytes_per_row, hex_str))
+      hex_str = ""
+    end
+  end
+
+  -- Print any remaining bytes in the last row
+  if #hex_str > 0 then
+    windower.add_to_chat(8, string.format("%04X  %s", #data - (#data % bytes_per_row), hex_str))
+  end
+end
+
+-- Debugging to discover packet structure
+local function print_bit_region(data, start_offset, length)
+  print("Offset   Hex    Binary")
+  for i = 0, length - 1 do
+    local byte = string.byte(data, start_offset + i)
+    local bits = ""
+    for bit_index = 7, 0, -1 do -- Convert byte to binary representation
+      bits = bits .. tostring(bit.band(byte, bit.lshift(1, bit_index)) ~= 0 and 1 or 0)
+    end
+    print(string.format("0x%02X     %02X     %s", start_offset + i - 1, byte, bits))
+  end
+end
+
+local function get_buff_data_from_packet(data, buff_start_offset, bitmask_offset, indi_buff_offset)
+  local buffs = {}
+
+  -- Read and process buffs using unpack('C') for unsigned 8-bit integers
+  for i = 0, 31 do
+    local buff = data:unpack('C', buff_start_offset + i) -- Direct unpacking
+    if buff and buff ~= 0 and buff ~= 255 then           -- Skip if 0 or 255 ("no buff")
+      local mask_index = math.floor(i / 4)
+      local shift = (i % 4) * 2
+      local bitmask_byte = data:unpack('C', bitmask_offset + mask_index) or 0
+      local mask_value = bit.band(bit.rshift(bitmask_byte, shift), 0x03)
+
+      -- Adjust buff using the bitmask
+      local adjusted_buff = buff + (mask_value * 256)
+      table.insert(buffs, adjusted_buff)
+    end
+  end
+
+  -- Extract the Indi Buff using unpack('b7')
+  local indi_buff = data:unpack('b7', indi_buff_offset) -- Read 7 bits directly at offset 0x58
+
+  -- Add the Indi Buff if it exists
+  if indi_buff ~= 0 then
+    table.insert(buffs, indi_buff)
+  end
+
+  return buffs
+end
+
+-- Player and Party packets are special and we can straight-up read the buffs from them
+-- instead of parsing the combat log -- very very nifty.
+windower.register_event('incoming chunk', function(id, data)
+  if status_effects.is_initialized then
+    if id == 0x037 then
+      local buffs = get_buff_data_from_packet(data, 0x04 + 1, 0x4C + 1, 0x58 + 1)
+      local player = windower.ffxi.get_player()
+
+      status_effects:add_buffs_raw(player.id, buffs)
+
+      -- windower.add_to_chat(8, 'Player buffs')
+      -- printTable(buffs)
+    elseif id == 0x076 then
+      local buffs = get_buff_data_from_packet(data, 0x14 + 1, 0x0C + 1, 0x58 + 1)
+      local id = data:unpack('I', 0x05)
+
+      status_effects:add_buffs_raw(id, buffs)
+
+      -- windower.add_to_chat(8, 'PC buffs')
+      -- printTable(buffs)
+    end
+  end
+end)
+
+
 
 function printTable(tbl, indent)
   indent = indent or 0

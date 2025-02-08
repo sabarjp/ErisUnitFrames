@@ -36,7 +36,7 @@ images = require('images')   -- global from windower
 packets = require('packets') -- global from windower
 res = require('resources')   -- global from windower
 config = require('config')   -- global from windower
-
+bit = require("bit")
 defaults = require('defaults')
 bar = require('bar')
 buffs = require('buffs')
@@ -259,6 +259,13 @@ end)
 --   local icon_path = string.format('%sicons/%s.bmp', windower.addon_path, id)
 --   if not windower.file_exists(icon_path) then
 --     icon_extractor.buff_by_id(id, icon_path)
+-- for id = 1, 29695, 1 do
+--   local icon_path = string.format('%sicons/items/%s.bmp', windower.addon_path, id)
+--   local item_data = res.items[id]
+--   if item_data and item_data.targets and next(item_data.targets) and item_data.flags and item_data.flags['Usable'] then
+--     if not windower.file_exists(icon_path) then
+--       icon_extractor.item_by_id(id, icon_path)
+--     end
 --   end
 -- end
 

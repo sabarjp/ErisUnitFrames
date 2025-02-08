@@ -130,6 +130,7 @@ local function update_tooltip(tooltip, hovering_buff)
   local buff_name = hovering_buff.buff_name or 'Unknown'
   local spell_name = hovering_buff.originating_spell or 'Unknown'
   local category = hovering_buff.buff_category
+  local is_definitive = hovering_buff.definitive
 
   -- Convert remaining time to a readable format
   local readable_time
@@ -144,7 +145,9 @@ local function update_tooltip(tooltip, hovering_buff)
   end
 
   if tooltip then
-    if buff_name == spell_name then
+    if is_definitive then
+      tooltip:text(string.format("%s", buff_name))
+    elseif buff_name == spell_name then
       tooltip:text(string.format("%s\n%s", buff_name, readable_time))
     else
       tooltip:text(string.format("%s (%s)\n%s", buff_name, spell_name, readable_time))
@@ -330,6 +333,7 @@ function buffs:update_buffs(buffs)
           end
 
           self._buffs[buff_key] = {
+            definitive = buff.definitive,
             background = new_buff_bg,
             image = new_buff_img,
             remaining_time = buff.end_time - os.clock(),
